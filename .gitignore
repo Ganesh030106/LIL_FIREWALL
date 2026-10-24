@@ -258,3 +258,10 @@ node_modules/
 venv/
 .vscode/
 .idea/
+
+# GitHub actions & workflows
+.github/
+/.github/
+
+docs/
+/docs/

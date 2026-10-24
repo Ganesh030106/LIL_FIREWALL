@@ -14,20 +14,6 @@
 
 ---
 
-## 📚 Technical Documentation Hub
-
-Comprehensive, in-depth architectural and operational guides are available in the [`docs/`](docs/index.md) portal:
-
-- **[Documentation Home & Overview](docs/index.md)**: Master portal and documentation directory.
-- **[System Architecture & Design](docs/architecture.md)**: Packet pipeline, stateful connection tracking, dual-engine storage, and tech stack.
-- **[Threat Detection & Machine Learning](docs/threat_detection.md)**: Brute-force sliding windows, Shannon entropy DNS tunneling, DGA analysis, 10-feature ML phishing model, and threat feeds.
-- **[Autonomous Response & Safe Containment](docs/autonomous_response.md)**: Automated IP isolation, allowlist immunity invariant, self-cleaning unblock daemon, emergency killswitch, and multi-channel notifications.
-- **[SQLite Database Maintenance & Storage](docs/database_maintenance.md)**: High-concurrency WAL pragmas, checkpointing (`TRUNCATE`), defragmentation (`VACUUM`), data retention, and integrity diagnostics.
-- **[REST API & WebSocket Reference](docs/api_reference.md)**: Complete endpoint catalogue, JWT authentication, RBAC roles, request/response schemas, and real-time WebSocket protocol.
-- **[Operations, Deployment & Testing](docs/operations_and_deployment.md)**: Single-command startup (`python run.py`), multi-stage Docker & Compose, 30 pytest unit/integration tests, attack simulation scenarios, and configuration reference.
-
----
-
 ## Table of Contents
 
 - [Core Architectural Highlights](#core-architectural-highlights)

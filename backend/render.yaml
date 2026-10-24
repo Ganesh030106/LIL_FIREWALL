@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: volcano-ai-firewall-backend
+    env: python
+    buildCommand: pip install -r requirements.txt && python model_generator.py
+    startCommand: python app.py
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: VOLCANO_DB_PATH
+        sync: false
+        placeholder: "Enter SQLite file path or PostgreSQL connection string (postgresql://...)"
+      - key: VOLCANO_ALLOWED_ORIGINS
+        value: "*"
+        placeholder: "CORS allowed origins (comma-separated, e.g., https://your-app.vercel.app)"
+      - key: VOLCANO_WATCH_DIRECTORY
+        value: "./sandbox"
+      - key: PYTHON_VERSION
+        value: 3.10.12

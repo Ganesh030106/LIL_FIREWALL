@@ -1,0 +1,14 @@
+name: c2-beaconing-response
+description: Automated containment and PCAP capture for persistent C2 beaconing
+match:
+  category: Possible C2 Beaconing
+  min_severity: high
+actions:
+  - type: block_ip
+    duration_seconds: 7200
+  - type: attach_pcap
+    packets: 500
+  - type: notify
+    channels: [slack, email]
+  - type: create_alert_note
+    note: C2 beaconing callback blocked and 500 packet sample attached for forensic triage.

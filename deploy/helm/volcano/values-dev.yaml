@@ -1,0 +1,33 @@
+# Development values for Volcano AI Firewall.
+# Single replica, development profile, in-memory brokers.
+
+replicaCount: 1
+
+profile: development
+
+config:
+  port: 8000
+  rateLimitBackend: "memory"
+  searchBackend: "sql"
+  wsBroker: "memory"
+  metricsEnabled: "true"
+  allowSqliteProduction: "false"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+podDisruptionBudget:
+  enabled: false
+
+existingSecret:
+  name: "volcano-dev-secrets"
+  keys:
+    jwtSecretKey: "JWT_SECRET_KEY"
+    databaseUrl: "DATABASE_URL"
+    redisUrl: "REDIS_URL"
+    metricsBearerToken: "METRICS_BEARER_TOKEN"

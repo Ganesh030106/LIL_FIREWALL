@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-10-23T09:39:12.580558+00:00",
+  "sample_count": 50,
+  "train_samples": 40,
+  "test_samples": 10,
+  "metrics": {
+    "threshold": 0.5,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0,
+    "false_positive_rate": 0.0,
+    "true_positive_rate": 1.0,
+    "confusion_matrix": {
+      "tn": 5,
+      "fp": 0,
+      "fn": 0,
+      "tp": 5
+    }
+  },
+  "cross_validation": {
+    "folds": 5,
+    "cv_roc_auc_mean": 1.0,
+    "cv_roc_auc_std": 0.0,
+    "cv_f1_mean": 1.0,
+    "cv_f1_std": 0.0
+  },
+  "calibration": {
+    "method": "sigmoid",
+    "brier_score_before": 0.0994,
+    "brier_score_after": 0.0023,
+    "brier_score_improvement": 0.0971
+  },
+  "gate_results": {
+    "passed": false,
+    "min_auc_required": 1.05,
+    "max_fpr_allowed": null,
+    "failures": [
+      "ROC-AUC 1.0000 < min threshold 1.0500"
+    ]
+  }
+}

@@ -1,0 +1,102 @@
+# Default values for Volcano AI Firewall.
+# Production Profile Defaults
+
+replicaCount: 2
+
+image:
+  repository: volcano-ai-firewall
+  pullPolicy: IfNotPresent
+  tag: "3.0.0"
+
+profile: production
+
+# Non-secret environment configuration
+config:
+  port: 8000
+  allowlistIps: "127.0.0.1,10.0.0.1,192.168.1.1"
+  autoBlockDurationMinutes: 15
+  notificationMinSeverity: "high"
+  rateLimitBackend: "redis"
+  searchBackend: "sql"
+  wsBroker: "redis"
+  metricsEnabled: "true"
+  dbPoolSize: 20
+  dbMaxOverflow: 30
+  dbPoolPrePing: "true"
+  dbPoolRecycle: 300
+  dbConnectTimeout: 10
+
+# Existing Secret Reference (Secrets must NEVER be inlined in values files)
+existingSecret:
+  name: "volcano-secrets"
+  keys:
+    jwtSecretKey: "JWT_SECRET_KEY"
+    databaseUrl: "DATABASE_URL"
+    redisUrl: "REDIS_URL"
+    metricsBearerToken: "METRICS_BEARER_TOKEN"
+
+# Primary web application must NOT use host networking
+hostNetwork: false
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: firewall.internal.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+probes:
+  liveness:
+    path: /api/health
+    port: 8000
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    path: /api/health
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Optional Separate Sensor DaemonSet for Host Network Packet Capture
+sensor:
+  enabled: false
+  image:
+    repository: volcano-ai-firewall
+    pullPolicy: IfNotPresent
+    tag: "3.0.0"
+  hostNetwork: true
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  ingestEndpoint: "http://volcano:8000/api/ingest/events"
+  secretRef:
+    name: "volcano-sensor-token"
+    key: "SENSOR_TOKEN"

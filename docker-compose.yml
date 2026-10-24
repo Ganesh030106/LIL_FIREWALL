@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  volcano:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: volcano_firewall
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DATABASE_URL=postgresql://volcano:volcano_secret@postgres:5432/volcano_db
+      - VOLCANO_JWT_SECRET_KEY=volcano-production-jwt-secret-replace-me
+      - VOLCANO_ALLOWLIST_IPS=127.0.0.1,10.0.0.1,192.168.1.1
+      - VOLCANO_AUTO_BLOCK_DURATION_MINUTES=5
+      - VOLCANO_NOTIFICATION_MIN_SEVERITY=high
+    volumes:
+      - volcano_data:/app/backend/data
+      - volcano_logs:/app/backend/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - volcano_net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: volcano_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: volcano
+      POSTGRES_PASSWORD: volcano_secret
+      POSTGRES_DB: volcano_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U volcano -d volcano_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - volcano_net
+
+volumes:
+  volcano_data:
+  volcano_logs:
+  pgdata:
+
+networks:
+  volcano_net:
+    driver: bridge

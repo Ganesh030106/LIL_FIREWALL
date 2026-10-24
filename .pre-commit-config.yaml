@@ -1,0 +1,20 @@
+# Pre-commit configuration for Volcano AI Firewall
+# Enforces ruff linting/formatting and secret scanning via gitleaks and detect-secrets
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        exclude: package-lock\.json|.*\.joblib|.*\.pcap

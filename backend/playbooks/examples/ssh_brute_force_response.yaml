@@ -1,0 +1,20 @@
+name: ssh-brute-force-response
+description: Automated containment for repeated SSH credential guessing attacks
+match:
+  category: Brute Force Attack
+  min_severity: high
+actions:
+  - type: block_ip
+    duration_seconds: 3600
+  - type: notify
+    channels: [slack]
+  - type: attach_pcap
+    packets: 200
+  - type: create_alert_note
+    note: Automated containment triggered by SSH brute-force playbook.
+
+
+
+
+
+

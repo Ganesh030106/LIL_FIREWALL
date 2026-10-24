@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "volcano.fullname" . }}-config
+  labels:
+    {{- include "volcano.labels" . | nindent 4 }}
+data:
+  VOLCANO_PROFILE: {{ .Values.profile | default "production" | quote }}
+  PORT: {{ .Values.config.port | default 8000 | quote }}
+  VOLCANO_RATE_LIMIT_BACKEND: {{ .Values.config.rateLimitBackend | default "redis" | quote }}
+  VOLCANO_SEARCH_BACKEND: {{ .Values.config.searchBackend | default "sql" | quote }}
+  VOLCANO_WS_BROKER: {{ .Values.config.wsBroker | default "redis" | quote }}
+  VOLCANO_METRICS_ENABLED: {{ .Values.config.metricsEnabled | default "true" | quote }}
+  {{- if .Values.config.allowlistIps }}
+  VOLCANO_ALLOWLIST_IPS: {{ .Values.config.allowlistIps | quote }}
+  {{- end }}
+  {{- if .Values.config.autoBlockDurationMinutes }}
+  VOLCANO_AUTO_BLOCK_DURATION_MINUTES: {{ .Values.config.autoBlockDurationMinutes | quote }}
+  {{- end }}
+  {{- if .Values.config.dbPoolSize }}
+  VOLCANO_DB_POOL_SIZE: {{ .Values.config.dbPoolSize | quote }}
+  {{- end }}
+  {{- if .Values.config.dbMaxOverflow }}
+  VOLCANO_DB_MAX_OVERFLOW: {{ .Values.config.dbMaxOverflow | quote }}
+  {{- end }}
+  {{- if .Values.config.dbPoolPrePing }}
+  VOLCANO_DB_POOL_PRE_PING: {{ .Values.config.dbPoolPrePing | quote }}
+  {{- end }}
+  {{- if .Values.config.dbPoolRecycle }}
+  VOLCANO_DB_POOL_RECYCLE: {{ .Values.config.dbPoolRecycle | quote }}
+  {{- end }}

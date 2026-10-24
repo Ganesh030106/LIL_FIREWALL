@@ -1,0 +1,40 @@
+{{- if .Values.sensor.enabled -}}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "volcano.fullname" . }}-sensor
+  labels:
+    {{- include "volcano.labels" . | nindent 4 }}
+    app.kubernetes.io/component: edge-sensor
+spec:
+  selector:
+    matchLabels:
+      {{- include "volcano.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: edge-sensor
+  template:
+    metadata:
+      labels:
+        {{- include "volcano.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: edge-sensor
+    spec:
+      hostNetwork: {{ .Values.sensor.hostNetwork | default true }}
+      containers:
+        - name: sensor
+          image: "{{ .Values.sensor.image.repository }}:{{ .Values.sensor.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.sensor.image.pullPolicy | default "IfNotPresent" }}
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+          env:
+            - name: VOLCANO_SENSOR_INGEST_URL
+              value: {{ .Values.sensor.ingestEndpoint | quote }}
+            - name: VOLCANO_SENSOR_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.sensor.secretRef.name }}
+                  key: {{ .Values.sensor.secretRef.key }}
+          resources:
+            {{- toYaml .Values.sensor.resources | nindent 12 }}
+{{- end }}

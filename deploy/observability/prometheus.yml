@@ -1,0 +1,19 @@
+# Sample Prometheus Scrape Configuration for Volcano AI Firewall v3.0
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "volcano_firewall"
+    metrics_path: "/metrics"
+    scheme: "http"
+    static_configs:
+      - targets: ["volcano:8000"]
+    # If VOLCANO_METRICS_BEARER_TOKEN is configured, uncomment authorization below:
+    # authorization:
+    #   type: Bearer
+    #   credentials: "YOUR_METRICS_BEARER_TOKEN"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: "volcano-primary"

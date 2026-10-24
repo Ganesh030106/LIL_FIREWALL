@@ -1,0 +1,79 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: volcano_app_prod
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file:
+      - .env.prod
+    environment:
+      - VOLCANO_PROFILE=production
+      - PORT=8000
+    volumes:
+      - volcano_prod_data:/app/backend/data
+      - volcano_prod_logs:/app/backend/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - volcano_prod_net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: volcano_postgres_prod
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-volcano_user} -d ${POSTGRES_DB:-volcano_production}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - volcano_prod_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: volcano_redis_prod
+    restart: unless-stopped
+    command: >
+      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
+        redis-server --requirepass "$$REDIS_PASSWORD";
+      else
+        redis-server;
+      fi'
+    env_file:
+      - .env.prod
+    volumes:
+      - redis_data_prod:/data
+    healthcheck:
+      test: >
+        sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
+          redis-cli -a "$$REDIS_PASSWORD" ping;
+        else
+          redis-cli ping;
+        fi'
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - volcano_prod_net
+
+volumes:
+  volcano_prod_data:
+  volcano_prod_logs:
+  pgdata_prod:
+  redis_data_prod:
+
+networks:
+  volcano_prod_net:
+    driver: bridge

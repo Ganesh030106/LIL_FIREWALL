@@ -1,0 +1,13 @@
+apiVersion: v2
+name: volcano
+description: A Helm chart for Volcano AI Firewall v3.0 (Scale and Architecture)
+type: application
+version: 3.0.0
+appVersion: "3.0.0"
+keywords:
+  - security
+  - firewall
+  - ids
+  - ai
+maintainers:
+  - name: Volcano Core Team

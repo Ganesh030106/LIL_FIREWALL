@@ -229,4 +229,32 @@ env/
 
 # Sandbox / Honeypot Runtime Artifacts
 sandbox/
-backend/sandbox/
+backend/sandbox/
+
+# Byte-compiled / optimized / test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+
+# Frontend builds and caches
+frontend/dist/
+frontend/.vite/
+node_modules/
+
+# Local databases and logs
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# Forensics and captures
+*.pcap
+*.pcapng
+
+# Environment & IDE
+.env
+.venv/
+venv/
+.vscode/
+.idea/

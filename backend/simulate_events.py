@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Volcano AI Firewall — Event Simulator
-======================================
+AI-Powered Contextual Firewall for Traffic Anomaly Detection — Event Simulator
+==============================================================================
 Generates realistic firewall events by pushing data through the backend API.
 This populates every section of the dashboard: alerts, packet metrics,
 firewall rules, port/IP history, TCP sessions, search/file-share logs, etc.

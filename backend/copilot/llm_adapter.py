@@ -135,7 +135,7 @@ class GroundedCopilot:
         telemetry_context = self._build_telemetry_context()
 
         system_prompt = (
-            "You are Volcano Security Copilot, an AI assistant for a local firewall Security Operations Center (SOC).\n"
+            "You are the Contextual Firewall Security Copilot, an AI assistant for a local Security Operations Center (SOC).\n"
             "You have READ-ONLY access to real-time firewall telemetry.\n"
             "You cannot execute arbitrary commands or disable defenses without human authorization.\n"
             "Answer the operator's question concisely, referencing specific IP addresses, alerts, or telemetry from the context below.\n\n"

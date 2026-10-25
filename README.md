@@ -43,7 +43,7 @@
                 │ REST API (JSON/JWT)          │ WebSockets (/ws/events)
                 ▼                              │ (2s live metrics push)
  ┌─────────────────────────────────────────────┴───────────────┐
- │               Volcano FastAPI Backend Core                  │
+ │    Contextual Firewall FastAPI Backend Core         │
  │                                                             │
  │ ┌──────────────────┐  ┌────────────────┐  ┌───────────────┐ │
  │ │  Scapy Sniffer   │  │ Threat Engine  │  │ Response Eng. │ │
@@ -87,7 +87,7 @@
 
 ## Default Operator Credentials & RBAC
 
-When first started, Volcano automatically initializes the database schema and seeds 3 default operator accounts:
+When first started, the firewall automatically initializes the database schema and seeds 3 default operator accounts:
 
 | Username | Default Password | Role | Permissions |
 | :--- | :--- | :--- | :--- |
@@ -106,8 +106,8 @@ The single launcher `python run.py` automatically checks your Python and Node en
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/volcano-ai-firewall.git
-cd volcano-ai-firewall
+git clone https://github.com/your-username/contextual-ai-firewall.git
+cd contextual-ai-firewall
 
 # Single-command setup and launch
 python run.py
@@ -125,7 +125,7 @@ Press `Ctrl+C` in the terminal to cleanly shut down both servers.
 
 ## Docker & Containerized Deployment
 
-Run Volcano AI Firewall along with a dedicated PostgreSQL 16 database using Docker Compose:
+Run the AI-Powered Contextual Firewall along with a dedicated PostgreSQL 16 database using Docker Compose:
 
 ```bash
 # Copy and customize environment variables
@@ -135,7 +135,7 @@ cp .env.example .env
 docker compose up -d --build
 
 # View real-time logs
-docker compose logs -f volcano
+docker compose logs -f firewall
 ```
 
 Stop services:
@@ -147,7 +147,7 @@ docker compose down
 
 ## Automated Testing
 
-Volcano includes a comprehensive automated test suite powered by `pytest` covering authentication, detection algorithms, allowlist containment safety, threat feeds, and packet forensics:
+The firewall platform includes a comprehensive automated test suite powered by `pytest` covering authentication, detection algorithms, allowlist containment safety, threat feeds, and packet forensics:
 
 ```bash
 # Run the complete test suite
@@ -216,7 +216,7 @@ Inspects active TCP payloads and HTTP request streams in real-time, decoding URL
 
 ## Autonomous Response & Safe Containment
 
-Volcano's `ResponseEngine` automatically mitigates threats while strictly enforcing safety guardrails:
+The `ResponseEngine` automatically mitigates threats while strictly enforcing safety guardrails:
 
 1. **Allowlist Invariant**: Addresses in `VOLCANO_ALLOWLIST_IPS` (plus loopback `127.0.0.1`, `::1`, and local gateway interfaces) can **never** be blocked, even if requested by an automated engine or manual operator.
 2. **Auto-Expiring Containment**: Dynamic blocks are injected with an expiration timestamp. A background daemon thread periodically polls for expired rules and deletes them, preventing permanent firewall rule bloat.
@@ -235,7 +235,7 @@ The AI Security Copilot synthesizes current firewall telemetry into grounded inc
 
 ## PCAP Forensics & Wireshark Buffer
 
-Volcano maintains a circular rolling buffer of the last 1,000 raw captured packets in memory:
+The firewall engine maintains a circular rolling buffer of the last 1,000 raw captured packets in memory:
 - **Global Capture Download**: Download the recent traffic buffer as a `.pcap` file for Wireshark inspection via `GET /api/pcap/export`.
 - **Forensic Alert Export**: Export PCAP packets captured around a specific incident via `GET /api/alerts/{alert_id}/pcap`.
 - **Buffer Status**: Inspect packet count and capacity at `GET /api/pcap/stats`.
@@ -340,4 +340,4 @@ All settings are tunable via environment variables or `backend/settings.json`:
 
 ## License
 
-Volcano AI Firewall is released under the [MIT License](LICENSE).
+AI-Powered Contextual Firewall for Traffic Anomaly Detection is released under the [MIT License](LICENSE).

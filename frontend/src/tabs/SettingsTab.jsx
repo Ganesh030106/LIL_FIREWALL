@@ -110,7 +110,7 @@ export default function SettingsTab({ currentUser }) {
             const res = await apiFetch("/api/notifications/test", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ channel, message: "Diagnostic test from Volcano Settings UI." }),
+                body: JSON.stringify({ channel, message: "Diagnostic test from Firewall Settings UI." }),
             });
             if (res.ok) {
                 setTestResult(await res.json());

@@ -2309,7 +2309,7 @@ def export_pcap(count: Optional[int] = None) -> Response:
         content=data,
         media_type="application/vnd.tcpdump.pcap",
         headers={
-            "Content-Disposition": f'attachment; filename="volcano_traffic_{ts}.pcap"',
+            "Content-Disposition": f'attachment; filename="firewall_traffic_{ts}.pcap"',
             "Content-Length": str(len(data)),
         },
     )

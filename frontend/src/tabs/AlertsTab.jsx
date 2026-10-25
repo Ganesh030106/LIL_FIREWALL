@@ -146,7 +146,7 @@ export default function AlertsTab({ currentUser }) {
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `volcano_alerts_${Date.now()}.csv`);
+        link.setAttribute("download", `firewall_alerts_${Date.now()}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -156,7 +156,7 @@ export default function AlertsTab({ currentUser }) {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(filtered, null, 2));
         const link = document.createElement("a");
         link.setAttribute("href", dataStr);
-        link.setAttribute("download", `volcano_alerts_${Date.now()}.json`);
+        link.setAttribute("download", `firewall_alerts_${Date.now()}.json`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

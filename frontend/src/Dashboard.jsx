@@ -168,7 +168,7 @@ export default function OverviewTab() {
                 <div className="tab-header-info">
                     <div className="tab-eyebrow">
                         <span className={`status-dot ${packetStatus.dot}`}></span>
-                        Volcano / AI Firewall
+                        Contextual Firewall / Traffic Anomaly Defense
                     </div>
                     <h1>Context-Aware Network Defense Console</h1>
                     <p className="tab-subtitle">

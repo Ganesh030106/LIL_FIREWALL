@@ -5,12 +5,12 @@
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export function getToken() {
-    return localStorage.getItem("volcano_token") || "";
+    return localStorage.getItem("cf_token") || localStorage.getItem("volcano_token") || "";
 }
 
 export function getUser() {
     try {
-        const u = localStorage.getItem("volcano_user");
+        const u = localStorage.getItem("cf_user") || localStorage.getItem("volcano_user");
         return u ? JSON.parse(u) : null;
     } catch {
         return null;
@@ -19,18 +19,22 @@ export function getUser() {
 
 export function setAuth(token, user) {
     if (token) {
-        localStorage.setItem("volcano_token", token);
+        localStorage.setItem("cf_token", token);
     } else {
+        localStorage.removeItem("cf_token");
         localStorage.removeItem("volcano_token");
     }
     if (user) {
-        localStorage.setItem("volcano_user", JSON.stringify(user));
+        localStorage.setItem("cf_user", JSON.stringify(user));
     } else {
+        localStorage.removeItem("cf_user");
         localStorage.removeItem("volcano_user");
     }
 }
 
 export function clearAuth() {
+    localStorage.removeItem("cf_token");
+    localStorage.removeItem("cf_user");
     localStorage.removeItem("volcano_token");
     localStorage.removeItem("volcano_user");
 }

@@ -222,6 +222,10 @@ class PlaybookLoader:
             })
         return sorted(results, key=lambda x: x["name"])
 
+    def get_playbook(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get parsed playbook dict by name."""
+        return self.playbooks.get(name)
+
 
 class PlaybookExecutor:
     """Executes validated playbook action chains in strict order with safe allowlist protections and auditing."""
@@ -439,6 +443,7 @@ class PlaybookExecutor:
         return {
             "playbook": pb_name,
             "success": overall_success,
+            "overall_success": overall_success,
             "dry_run": is_dry_run,
             "steps_count": len(executed_steps),
             "steps": executed_steps,

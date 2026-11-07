@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { apiFetch } from "../services/api";
 
-export default function ToolsTab({ currentUser }) {
+export default function ToolsTab() {
     // ── URL Phishing Analyzer ──
     const [urlValue, setUrlValue] = useState("");
     const [analysis, setAnalysis] = useState(null);
@@ -41,8 +41,6 @@ export default function ToolsTab({ currentUser }) {
     const [remediatingPort, setRemediatingPort] = useState(null);
     const [remediationMsg, setRemediationMsg] = useState("");
 
-    const isViewer = currentUser?.role === "viewer";
-
     // ─── Handlers ───
     const handlePortScan = async (e) => {
         e.preventDefault();
@@ -77,10 +75,6 @@ export default function ToolsTab({ currentUser }) {
     };
 
     const handleApplyRemediationRule = async (rule) => {
-        if (isViewer) {
-            alert("Viewer role is read-only. Login as Admin or Analyst to deploy firewall rules.");
-            return;
-        }
         setRemediatingPort(rule.dst_port);
         setRemediationMsg("");
         try {
@@ -109,10 +103,8 @@ export default function ToolsTab({ currentUser }) {
         try {
             const formData = new FormData();
             formData.append("file", fileObj);
-            const token = localStorage.getItem("token");
-            const res = await fetch("/api/check-file", {
+            const res = await apiFetch("/api/check-file", {
                 method: "POST",
-                headers: token ? { "Authorization": `Bearer ${token}` } : {},
                 body: formData,
             });
             if (!res.ok) {
@@ -157,7 +149,24 @@ export default function ToolsTab({ currentUser }) {
                 const errData = await res.json().catch(() => ({}));
                 throw new Error(errData.detail || "Traffic anomaly scoring failed.");
             }
-            setFlowAnalysis(await res.json());
+            const flowData = await res.json();
+            try {
+                const xaiRes = await apiFetch("/api/ai/explain", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        feature_type: "flow",
+                        payload: {
+                            pps: rate,
+                            packet_size: parseFloat(flowForm.packet_size) || 64,
+                            dest_port: parseInt(flowForm.dst_port) || 80,
+                            protocol: flowForm.protocol || "TCP",
+                        }
+                    })
+                });
+                if (xaiRes.ok) flowData.xai = await xaiRes.json();
+            } catch {}
+            setFlowAnalysis(flowData);
         } catch (err) {
             setFlowAnalysis({ error: err.message });
         } finally {
@@ -180,7 +189,19 @@ export default function ToolsTab({ currentUser }) {
                 const fallback = await res.text();
                 throw new Error(fallback || "Phishing check failed.");
             }
-            setAnalysis(await res.json());
+            const urlData = await res.json();
+            try {
+                const xaiRes = await apiFetch("/api/ai/explain", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        feature_type: "url",
+                        payload: { url: urlValue.trim() }
+                    })
+                });
+                if (xaiRes.ok) urlData.xai = await xaiRes.json();
+            } catch {}
+            setAnalysis(urlData);
         } catch (err) {
             setAnalysis({ error: err?.message ?? "Phishing check failed." });
         } finally {
@@ -188,10 +209,9 @@ export default function ToolsTab({ currentUser }) {
         }
     };
 
-    const handleCopilot = async (e) => {
-        e.preventDefault();
-        if (!copilotQuery.trim()) return;
-        const userMsg = copilotQuery.trim();
+    const executeCopilotQuery = async (queryText) => {
+        if (!queryText || !queryText.trim()) return;
+        const userMsg = queryText.trim();
         setCopilotHistory(h => [...h, { role: "user", text: userMsg }]);
         setCopilotQuery("");
         setCopilotLoading(true);
@@ -207,6 +227,11 @@ export default function ToolsTab({ currentUser }) {
         } finally {
             setCopilotLoading(false);
         }
+    };
+
+    const handleCopilot = (e) => {
+        e.preventDefault();
+        executeCopilotQuery(copilotQuery);
     };
 
     const handleReport = async (e) => {
@@ -244,10 +269,6 @@ export default function ToolsTab({ currentUser }) {
     };
 
     const handlePanic = async () => {
-        if (isViewer) {
-            alert("Viewer role is read-only. Login as Admin for emergency controls.");
-            return;
-        }
         const confirmMsg = dryRun
             ? "Simulate emergency network isolation in DRY-RUN mode? (No hardware will be disabled)"
             : "⚠️ WARNING: This will DISABLE the host network interface. Are you sure you want to isolate the system?";
@@ -272,10 +293,6 @@ export default function ToolsTab({ currentUser }) {
     };
 
     const handleRestore = async () => {
-        if (isViewer) {
-            alert("Viewer role is read-only. Login as Admin for emergency controls.");
-            return;
-        }
         setPanicState({ loading: true, message: "" });
         try {
             const res = await apiFetch("/api/killswitch/restore", {
@@ -375,6 +392,37 @@ export default function ToolsTab({ currentUser }) {
                                         </div>
                                     </div>
                                 )}
+                                {analysis.xai && analysis.xai.feature_contributions && (
+                                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                                        <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#00d2ff", marginBottom: 6 }}>
+                                            🧠 Explainable AI Feature Attribution:
+                                        </div>
+                                        <div className="xai-bar-wrap">
+                                            {analysis.xai.feature_contributions.map((f, i) => (
+                                                <div key={i} className="xai-bar-item">
+                                                    <div className="xai-bar-header">
+                                                        <span style={{ fontWeight: 600 }}>{f.feature}</span>
+                                                        <span style={{ fontFamily: "var(--font-mono)", color: f.influence === "Malicious" ? "var(--danger)" : "var(--primary)" }}>
+                                                            {f.percentage}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="xai-bar-track">
+                                                        <div
+                                                            className="xai-bar-fill"
+                                                            style={{
+                                                                width: `${f.percentage}%`,
+                                                                background: f.influence === "Malicious" ? "var(--danger)" : "var(--primary)",
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>
+                                                        {f.evidence}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )
                     )}
@@ -411,6 +459,21 @@ export default function ToolsTab({ currentUser }) {
                                 </div>
                             ))
                         )}
+                    </div>
+                    {/* Quick Copilot Prompts */}
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "8px" }}>
+                        <button type="button" className="chip" style={{ fontSize: "0.72rem", cursor: "pointer" }} onClick={() => executeCopilotQuery("Explain MITRE technique T1190")}>
+                            🎯 MITRE T1190
+                        </button>
+                        <button type="button" className="chip" style={{ fontSize: "0.72rem", cursor: "pointer" }} onClick={() => executeCopilotQuery("What is our current Security Posture score?")}>
+                            🛡️ Security Posture
+                        </button>
+                        <button type="button" className="chip" style={{ fontSize: "0.72rem", cursor: "pointer" }} onClick={() => executeCopilotQuery("Summarize active critical alerts")}>
+                            🚨 Critical Alerts
+                        </button>
+                        <button type="button" className="chip" style={{ fontSize: "0.72rem", cursor: "pointer" }} onClick={() => executeCopilotQuery("Recommend firewall mitigation actions")}>
+                            ⚡ Recommend Actions
+                        </button>
                     </div>
                     <form onSubmit={handleCopilot} style={{ display: "flex", gap: 8 }}>
                         <input
@@ -658,6 +721,37 @@ export default function ToolsTab({ currentUser }) {
                                         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                             {flowAnalysis.signals.map((sig, idx) => (
                                                 <span key={idx} className="badge badge-warning" style={{ fontSize: "0.75rem" }}>⚡ {sig}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {flowAnalysis.xai && flowAnalysis.xai.feature_contributions && (
+                                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                                        <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#00d2ff", marginBottom: 6 }}>
+                                            🧠 Flow Anomaly Feature Contributions:
+                                        </div>
+                                        <div className="xai-bar-wrap">
+                                            {flowAnalysis.xai.feature_contributions.map((f, i) => (
+                                                <div key={i} className="xai-bar-item">
+                                                    <div className="xai-bar-header">
+                                                        <span style={{ fontWeight: 600 }}>{f.feature}</span>
+                                                        <span style={{ fontFamily: "var(--font-mono)", color: f.influence === "Malicious" ? "var(--danger)" : "var(--primary)" }}>
+                                                            {f.percentage}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="xai-bar-track">
+                                                        <div
+                                                            className="xai-bar-fill"
+                                                            style={{
+                                                                width: `${f.percentage}%`,
+                                                                background: f.influence === "Malicious" ? "var(--danger)" : "var(--primary)",
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>
+                                                        {f.evidence}
+                                                    </div>
+                                                </div>
                                             ))}
                                         </div>
                                     </div>
@@ -982,7 +1076,7 @@ export default function ToolsTab({ currentUser }) {
                                                                 priority: vuln.severity === "critical" ? 10 : 20,
                                                                 description: `Auto-mitigation for ${vuln.title}`,
                                                             })}
-                                                            disabled={remediatingPort === vuln.port || isViewer}
+                                                            disabled={remediatingPort === vuln.port}
                                                             style={{
                                                                 borderColor: "rgba(239,68,68,0.4)",
                                                                 color: "#ef4444",
@@ -1045,14 +1139,14 @@ export default function ToolsTab({ currentUser }) {
                     </label>
                 </div>
                 <div className="panic-actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <button className="btn-panic" type="button" onClick={handlePanic} disabled={panicState.loading || isViewer}>
+                    <button className="btn-panic" type="button" onClick={handlePanic} disabled={panicState.loading}>
                         {panicState.loading ? "Executing…" : (dryRun ? "🧪 Test Killswitch" : "🔴 Disconnect Host")}
                     </button>
                     <button
                         className="btn"
                         type="button"
                         onClick={handleRestore}
-                        disabled={panicState.loading || isViewer}
+                        disabled={panicState.loading}
                         style={{ height: "48px", borderColor: "rgba(34,197,94,0.4)", color: "#22c55e" }}
                     >
                         🟢 Restore Network

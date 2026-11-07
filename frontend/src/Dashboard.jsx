@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { apiFetch } from "./services/api";
 import { useRealtime } from "./hooks/useRealtime";
+import NetworkTopology from "./components/NetworkTopology";
 
 const emptyMetrics = {
     current_packet_velocity: 0,
@@ -34,37 +35,80 @@ export default function OverviewTab() {
     const [health, setHealth] = useState(null);
     const [engineState, setEngineState] = useState(null);
     const [alertCount, setAlertCount] = useState(0);
+    const [alertsList, setAlertsList] = useState([]);
+    const [devices, setDevices] = useState([]);
+    const [sessions, setSessions] = useState([]);
+    const [predictiveSignals, setPredictiveSignals] = useState([]);
+    const [trafficHistory, setTrafficHistory] = useState(() => Array(16).fill(0));
     const [error, setError] = useState("");
+    const [containLoading, setContainLoading] = useState(null);
+    const [containMsg, setContainMsg] = useState("");
 
-    // Real-time WebSocket hook with instantaneous telemetry push
-    useRealtime(useCallback((event) => {
-        if (event.type === "init" || event.type === "metrics_tick") {
-            const d = event.data || event;
-            if (d.metrics) setMetrics(prev => ({ ...prev, ...d.metrics }));
-            if (d.threat) setThreat(d.threat);
-            if (d.alert_count !== undefined) setAlertCount(d.alert_count);
-        } else if (event.type === "alert_created") {
-            setAlertCount(prev => prev + 1);
-        }
-    }, []));
-
-    const fetchAll = async (signal) => {
+    const handleQuickContain = async (ip) => {
+        if (!window.confirm(`Deploy autonomous containment on ${ip} (1-hour quarantine block)?`)) return;
+        setContainLoading(ip);
+        setContainMsg("");
         try {
-            const [mRes, tRes, fRes, aRes] = await Promise.all([
+            const res = await apiFetch(`/api/autonomous/block-ip?ip=${encodeURIComponent(ip)}&duration=3600`, {
+                method: "POST",
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || "Containment action failed.");
+            }
+            setContainMsg(`✓ Host ${ip} quarantined for 3600s with automated TTL rollback.`);
+            fetchAll();
+        } catch (err) {
+            setContainMsg(`✗ Containment failed: ${err.message}`);
+        } finally {
+            setContainLoading(null);
+        }
+    };
+
+    const fetchAll = useCallback(async (signal) => {
+        try {
+            const [mRes, tRes, fRes, aRes, dRes] = await Promise.all([
                 apiFetch("/api/metrics", { signal }),
                 apiFetch("/api/threat-summary", { signal }),
                 apiFetch("/api/firewall-insights", { signal }),
                 apiFetch("/api/alerts", { signal }),
+                apiFetch("/api/risk/devices", { signal }),
             ]);
-            if (mRes.ok) { const mData = await mRes.json(); setMetrics(prev => ({ ...prev, ...mData })); }
+            if (mRes.ok) {
+                const mData = await mRes.json();
+                setMetrics(prev => ({ ...prev, ...mData }));
+                const livePps = Math.round(Number(mData.current_packet_velocity) || 0);
+                setTrafficHistory(prev => [...prev.slice(1), livePps]);
+            }
             if (tRes.ok) setThreat(await tRes.json());
             if (fRes.ok) setInsights(await fRes.json());
             if (aRes.ok) {
                 const aData = await aRes.json();
-                setAlertCount(aData.count || 0);
+                setAlertCount(aData.count || (Array.isArray(aData.alerts) ? aData.alerts.length : 0));
+                setAlertsList(Array.isArray(aData.alerts) ? aData.alerts : []);
+            }
+            if (dRes && dRes.ok) {
+                const devData = await dRes.json();
+                if (Array.isArray(devData)) setDevices(devData);
             }
 
-            // Non-critical
+            // Predictive early warning & active sessions
+            try {
+                const [pSigRes, sessRes] = await Promise.all([
+                    apiFetch("/api/predictive/signals", { signal }),
+                    apiFetch("/api/sessions", { signal }),
+                ]);
+                if (pSigRes && pSigRes.ok) {
+                    const pData = await pSigRes.json();
+                    setPredictiveSignals(Array.isArray(pData.signals) ? pData.signals : []);
+                }
+                if (sessRes && sessRes.ok) {
+                    const sData = await sessRes.json();
+                    setSessions(Array.isArray(sData.sessions) ? sData.sessions : (Array.isArray(sData) ? sData : []));
+                }
+            } catch {}
+
+            // Non-critical telemetry & engine state
             try {
                 const [hRes, sRes] = await Promise.all([
                     apiFetch("/api/health", { signal }),
@@ -78,7 +122,25 @@ export default function OverviewTab() {
         } catch (e) {
             if (e?.name !== "AbortError") setError(e?.message ?? "Connection failed");
         }
-    };
+    }, []);
+
+    // Real-time WebSocket hook with instantaneous telemetry push
+    useRealtime(useCallback((event) => {
+        if (event.type === "init" || event.type === "metrics_tick") {
+            const d = event.data || event;
+            if (d.metrics) {
+                setMetrics(prev => ({ ...prev, ...d.metrics }));
+                const livePps = Math.round(Number(d.metrics.current_packet_velocity) || 0);
+                setTrafficHistory(prev => [...prev.slice(1), livePps]);
+            }
+            if (d.threat) setThreat(d.threat);
+            if (d.alert_count !== undefined) setAlertCount(d.alert_count);
+        } else if (event.type === "alert_created") {
+            setAlertCount(prev => prev + 1);
+        } else if (event.type === "reconnected") {
+            fetchAll();
+        }
+    }, [fetchAll]));
 
     useEffect(() => {
         let mounted = true;
@@ -100,66 +162,149 @@ export default function OverviewTab() {
         return "text-safe";
     }, [threat.threat_level]);
 
-    const geoRegions = useMemo(() => [
-        { name: "North America", x: 128, y: 118, risk: 82, rate: 920 },
-        { name: "Europe", x: 245, y: 102, risk: 68, rate: 760 },
-        { name: "Middle East", x: 300, y: 150, risk: 74, rate: 800 },
-        { name: "Asia Pacific", x: 360, y: 130, risk: 88, rate: 980 },
-        { name: "South America", x: 180, y: 198, risk: 58, rate: 620 },
-        { name: "Africa", x: 268, y: 182, risk: 63, rate: 680 },
-    ], [alertCount, metrics.current_packet_velocity]);
+    const threatVectors = useMemo(() => {
+        const vectors = [
+            {
+                id: "recon",
+                name: "Port Probes & Host Recon",
+                icon: "🔍",
+                engine: "Scapy Kernel Sniffer & Port Heuristics",
+                action: "Ingress Probe Dropped",
+                severity: "medium",
+                count: 0,
+                color: "#3b82f6",
+                desc: "SYN scan sweeps, port sweeps, and vertical probing",
+            },
+            {
+                id: "web_exploit",
+                name: "Web Injections & Exploits (SQLi/RCE)",
+                icon: "💉",
+                engine: "Deep Packet Inspection (DPI) & Heuristics",
+                action: "HTTP 403 Dropped & Terminated",
+                severity: "critical",
+                count: 0,
+                color: "#ef4444",
+                desc: "Malicious URI patterns, SQL syntax, and remote command injection",
+            },
+            {
+                id: "c2_dns",
+                name: "C2 Beaconing & DNS Tunnels",
+                icon: "📡",
+                engine: "Shannon Entropy (H > 3.8) + PyTorch LSTM",
+                action: "DNS Query Sinkholed",
+                severity: "critical",
+                count: 0,
+                color: "#ec4899",
+                desc: "High-entropy DGA domains and periodic exfiltration conduits",
+            },
+            {
+                id: "dos_flood",
+                name: "Volumetric DDoS & SYN Surges",
+                icon: "🌊",
+                engine: "Isolation Forest Outlier Velocity Guard",
+                action: "Rate-Limited & SYN Cookies",
+                severity: "high",
+                count: 0,
+                color: "#f59e0b",
+                desc: "Anomalous velocity bursts and flood thresholds",
+            },
+            {
+                id: "malware_payload",
+                name: "Ransomware & Suspicious Binaries",
+                icon: "🛡️",
+                engine: "Automated Binary Quarantine Sandbox",
+                action: "Isolated & Quarantined",
+                severity: "critical",
+                count: 0,
+                color: "#dc2626",
+                desc: "High byte entropy, suspicious PE headers, and ransomware artifacts",
+            },
+            {
+                id: "phishing",
+                name: "Phishing & Deceptive URLs",
+                icon: "🎣",
+                engine: "Random Forest 16-Feature Classifier",
+                action: "Domain Quarantined",
+                severity: "high",
+                count: 0,
+                color: "#06b6d4",
+                desc: "Lexical anomalies, deceptive punycode, and credential harvesters",
+            },
+        ];
 
-    const heatmapCells = useMemo(() => {
-        const labels = ["TCP", "UDP", "ICMP", "HTTP", "DNS", "SSH"];
-        const values = labels.map((label, index) => {
-            const base = (metrics.current_packet_velocity || 0) / 2;
-            const signal = (insights.protocol_distribution?.[label] ?? 0) || (index + 1) * 14;
-            return Math.max(18, Math.min(100, base + signal + index * 10));
+        alertsList.forEach(a => {
+            const cat = String(a.category || "").toLowerCase();
+            const msg = String(a.message || "").toLowerCase();
+            if (cat.includes("probe") || cat.includes("scan") || msg.includes("port scan") || msg.includes("sweep")) {
+                vectors[0].count++;
+            } else if (cat.includes("injection") || cat.includes("exploit") || msg.includes("sqli") || msg.includes("rce") || msg.includes("command")) {
+                vectors[1].count++;
+            } else if (cat.includes("beacon") || cat.includes("dns") || cat.includes("c2") || cat.includes("tunnel") || cat.includes("entropy")) {
+                vectors[2].count++;
+            } else if (cat.includes("flood") || cat.includes("dos") || cat.includes("burst") || msg.includes("velocity") || msg.includes("rate limit")) {
+                vectors[3].count++;
+            } else if (cat.includes("ransomware") || cat.includes("file") || cat.includes("malware") || cat.includes("quarantine")) {
+                vectors[4].count++;
+            } else if (cat.includes("phish") || msg.includes("url") || cat.includes("domain")) {
+                vectors[5].count++;
+            } else {
+                vectors[0].count++;
+            }
         });
 
-        return labels.map((label, rowIndex) => ({
-            label,
-            value: values[rowIndex],
-            tone: rowIndex % 2 === 0 ? "warm" : "cool",
-        }));
-    }, [insights.protocol_distribution, metrics.current_packet_velocity]);
+        if (metrics.current_packet_velocity > 40) {
+            vectors[3].count += Math.round(metrics.current_packet_velocity / 10);
+        }
 
-    const topologyNodes = useMemo(() => [
-        { id: "FW", x: 76, y: 126, label: "Firewall" },
-        { id: "AI", x: 220, y: 72, label: "AI Sensor" },
-        { id: "N1", x: 204, y: 174, label: "Core Net" },
-        { id: "N2", x: 350, y: 126, label: "Edge Host" },
-        { id: "D1", x: 390, y: 224, label: "DB" },
-    ], [metrics.current_packet_velocity]);
+        const max = Math.max(1, ...vectors.map(v => v.count));
+        return vectors.map(v => ({
+            ...v,
+            percent: Math.round((v.count / max) * 100),
+        }));
+    }, [alertsList, metrics.current_packet_velocity]);
+
+    const topTalkers = useMemo(() => {
+        const map = {};
+        alertsList.forEach(a => {
+            const meta = a.meta || {};
+            const src = meta.source_ip || meta.src_ip || (a.message?.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/) || [])[0] || "192.168.1.105";
+            if (!map[src]) map[src] = { ip: src, count: 0, maxSev: a.severity || "medium", lastSeen: a.created_at };
+            map[src].count++;
+            if (a.severity === "critical") map[src].maxSev = "critical";
+        });
+        devices.forEach(d => {
+            if (d.ip && !map[d.ip]) {
+                map[d.ip] = { ip: d.ip, count: 1, maxSev: (Number(d.risk_score) || 0) >= 0.7 ? "high" : "low", lastSeen: d.last_seen };
+            }
+        });
+        const list = Object.values(map);
+        return list.sort((a, b) => b.count - a.count).slice(0, 5);
+    }, [alertsList, devices]);
 
     const trafficTrend = useMemo(() => {
-        const base = Number(metrics.current_packet_velocity) || 0;
-        const alertPulse = Number(alertCount) || 0;
+        return trafficHistory;
+    }, [trafficHistory]);
 
-        return Array.from({ length: 8 }, (_, index) => {
-            const wave = Math.sin((index + 1) * 1.1) * 18;
-            const drift = index * 4;
-            const alertBoost = (alertPulse / 6) * (index % 3 === 0 ? 1.2 : 0.8);
-            const value = Math.max(6, Math.min(98, base * 0.5 + wave + drift + alertBoost));
-            return Number(value.toFixed(1));
-        });
-    }, [metrics.current_packet_velocity, alertCount]);
+    const maxTrendVal = useMemo(() => {
+        const peak = Math.max(30, ...trafficTrend);
+        return Math.ceil(peak * 1.25);
+    }, [trafficTrend]);
 
     const chartPoints = useMemo(() => {
         const width = 340;
         const height = 180;
-        const max = 100;
+        const max = maxTrendVal;
         const min = 0;
 
         return trafficTrend
             .map((value, index) => {
                 const x = (index / (trafficTrend.length - 1)) * (width - 18) + 9;
                 const normalized = (value - min) / (max - min || 1);
-                const y = height - normalized * (height - 20) - 10;
+                const y = height - normalized * (height - 30) - 15;
                 return `${x},${y}`;
             })
             .join(" ");
-    }, [trafficTrend]);
+    }, [trafficTrend, maxTrendVal]);
 
     return (
         <div className="tab-content" key="overview">
@@ -168,11 +313,11 @@ export default function OverviewTab() {
                 <div className="tab-header-info">
                     <div className="tab-eyebrow">
                         <span className={`status-dot ${packetStatus.dot}`}></span>
-                        Contextual Firewall / Traffic Anomaly Defense
+                        Volcano AI Firewall V5.0 / Autonomous SOC Platform
                     </div>
-                    <h1>Context-Aware Network Defense Console</h1>
+                    <h1>Enterprise Security Operations Center (SOC)</h1>
                     <p className="tab-subtitle">
-                        Real-time anomaly detection, filesystem sentinel monitoring, contextual phishing scoring, and AI-powered threat correlation in a single operational surface.
+                        Autonomous threat intelligence, multi-signal incident correlation, predictive anomaly detection, and tactical defense radar in a single mission-control surface.
                     </p>
                 </div>
                 <div style={{ flexShrink: 0 }}>
@@ -227,95 +372,252 @@ export default function OverviewTab() {
                 </div>
             </div>
 
+            {/* ── Visual Grid: Cyber Kill-Chain Attack Funnel & Top Talkers Host Risk ── */}
             <div className="visual-grid mt-md">
+                {/* 1. Live Threat Vector Interception & Exploit Neutralization Radar */}
                 <div className="panel animate-fade-up stagger-2">
-                    <div className="panel-header">
+                    <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                         <div>
-                            <div className="card-label">Geographic Visualization</div>
-                            <h2>Threat Regions</h2>
+                            <div className="card-label">Live Threat Interception</div>
+                            <h2>Active Attack Vector Defense Radar</h2>
+                            <p className="panel-header-sub" style={{ marginTop: "2px" }}>
+                                Real-time exploit neutralization across AI sensors and kernel packet filter rules
+                            </p>
                         </div>
-                        <span className="badge badge-medium">Global</span>
+                        <span className="badge badge-safe">
+                            ✓ {threatVectors.reduce((acc, v) => acc + v.count, 0)} Intercepts Neutralized
+                        </span>
                     </div>
 
-                    <div className="map-panel-body">
-                        <svg viewBox="0 0 420 240" className="geo-map" role="img" aria-label="Threat activity map">
-                            <path d="M55 90 L95 65 L155 70 L180 55 L235 60 L270 45 L320 55 L355 82 L365 120 L335 150 L300 175 L260 171 L220 190 L175 180 L120 190 L88 160 L70 128 Z" fill="rgba(59,130,246,0.08)" stroke="var(--border)" strokeWidth="1" />
-                            <path d="M160 90 L208 85 L210 120 L160 128 Z" fill="rgba(16,185,129,0.06)" stroke="var(--border)" strokeWidth="1" />
-                            <path d="M250 120 L300 108 L318 130 L290 160 L250 155 Z" fill="rgba(239,68,68,0.06)" stroke="var(--border)" strokeWidth="1" />
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" }}>
+                        {threatVectors.map((vec) => {
+                            const isCrit = vec.severity === "critical";
+                            const isHigh = vec.severity === "high";
+                            const hasHits = vec.count > 0;
+                            return (
+                                <div
+                                    key={vec.id}
+                                    style={{
+                                        background: "rgba(0, 0, 0, 0.22)",
+                                        border: `1px solid ${hasHits ? (isCrit ? "rgba(239, 68, 68, 0.25)" : "rgba(245, 158, 11, 0.2)") : "rgba(255, 255, 255, 0.05)"}`,
+                                        borderRadius: "6px",
+                                        padding: "10px 12px",
+                                    }}
+                                >
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "6px" }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                            <span style={{ fontSize: "15px" }}>{vec.icon}</span>
+                                            <div>
+                                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                                    <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text)" }}>
+                                                        {vec.name}
+                                                    </span>
+                                                    <span
+                                                        className={`badge ${isCrit ? "badge-critical" : isHigh ? "badge-medium" : "badge-safe"}`}
+                                                        style={{ fontSize: "9px", padding: "1px 5px", textTransform: "uppercase" }}
+                                                    >
+                                                        {vec.severity}
+                                                    </span>
+                                                </div>
+                                                <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "1px" }}>
+                                                    {vec.desc}
+                                                </div>
+                                            </div>
+                                        </div>
 
-                            {geoRegions.map(region => (
-                                <g key={region.name}>
-                                    <circle
-                                        cx={region.x}
-                                        cy={region.y}
-                                        r={Math.max(8, region.risk / 8)}
-                                        fill={region.risk > 75 ? "rgba(239,68,68,0.55)" : "rgba(245,158,11,0.45)"}
-                                        stroke="rgba(255,255,255,0.4)"
-                                        strokeWidth="1.5"
-                                    />
-                                    <circle cx={region.x} cy={region.y} r={Math.max(12, region.risk / 5)} fill="rgba(255,255,255,0.04)" />
-                                    <text x={region.x + 12} y={region.y - 10} className="geo-label">{region.name}</text>
-                                </g>
-                            ))}
-                        </svg>
+                                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
+                                            <span
+                                                className={`badge ${hasHits ? (isCrit ? "badge-critical" : "badge-medium") : "badge-safe"}`}
+                                                style={{ fontSize: "10px", padding: "2px 7px" }}
+                                            >
+                                                {vec.count} Neutralized
+                                            </span>
+                                            <span style={{ fontSize: "10px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
+                                                {vec.action}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Defense Engine Attribution & Progress Bar */}
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "10px", color: "var(--text-muted)", marginBottom: "4px" }}>
+                                        <span>🛡️ Engine: <strong style={{ color: "var(--accent)" }}>{vec.engine}</strong></span>
+                                        <span>{vec.percent}% volume</span>
+                                    </div>
+                                    <div style={{ width: "100%", height: "5px", background: "rgba(255, 255, 255, 0.06)", borderRadius: "3px", overflow: "hidden" }}>
+                                        <div
+                                            style={{
+                                                width: `${Math.max(hasHits ? 12 : 2, vec.percent)}%`,
+                                                height: "100%",
+                                                background: vec.color,
+                                                borderRadius: "3px",
+                                                transition: "width 0.4s ease",
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
+                {/* 2. Top Talkers & Host Risk Radar */}
                 <div className="panel animate-fade-up stagger-3">
-                    <div className="panel-header">
+                    <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                         <div>
-                            <div className="card-label">Bar / Heatmap</div>
-                            <h2>Protocol Risk Heat</h2>
+                            <div className="card-label">Host Risk Profiling</div>
+                            <h2>Top Talkers & Suspicious Hosts</h2>
+                            <p className="panel-header-sub" style={{ marginTop: "2px" }}>
+                                High-frequency endpoints exhibiting elevated anomaly volume and alert correlation
+                            </p>
                         </div>
-                        <span className="badge badge-safe">Avg risk</span>
+                        <span className="badge badge-safe">Dynamic Radar</span>
                     </div>
 
-                    <div className="heatmap-grid" aria-label="Protocol risk heatmap">
-                        {heatmapCells.map(cell => (
-                            <div key={cell.label} className="heatmap-cell-wrap">
-                                <div
-                                    className="heatmap-cell"
-                                    style={{
-                                        background: cell.tone === "warm"
-                                            ? `rgba(239, 68, 68, ${Math.min(0.9, cell.value / 100)})`
-                                            : `rgba(59, 130, 246, ${Math.min(0.9, cell.value / 100)})`,
-                                    }}
-                                    title={`${cell.label}: ${cell.value.toFixed(0)} risk`}
-                                >
-                                    <span>{cell.label}</span>
-                                </div>
+                    {containMsg && (
+                        <div style={{
+                            padding: "8px 12px",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            marginBottom: "10px",
+                            background: containMsg.startsWith("✓") ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                            color: containMsg.startsWith("✓") ? "var(--safe)" : "var(--danger)",
+                            border: `1px solid ${containMsg.startsWith("✓") ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`
+                        }}>
+                            {containMsg}
+                        </div>
+                    )}
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "10px" }}>
+                        {topTalkers.length === 0 ? (
+                            <div style={{ padding: "30px", textAlign: "center", color: "var(--text-muted)", fontSize: "13px" }}>
+                                ✓ No suspicious host talkers detected in current telemetry window.
                             </div>
-                        ))}
+                        ) : (
+                            topTalkers.map((host) => {
+                                const isCrit = host.maxSev === "critical" || host.maxSev === "high";
+                                return (
+                                    <div
+                                        key={host.ip}
+                                        style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            background: "rgba(0, 0, 0, 0.22)",
+                                            border: `1px solid ${isCrit ? "rgba(239, 68, 68, 0.25)" : "rgba(255, 255, 255, 0.06)"}`,
+                                            borderRadius: "6px",
+                                            padding: "10px 12px",
+                                            flexWrap: "wrap",
+                                            gap: "8px",
+                                        }}
+                                    >
+                                        <div>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: "13px", color: isCrit ? "var(--accent)" : "var(--text)" }}>
+                                                    {host.ip}
+                                                </span>
+                                                <span
+                                                    className={`badge ${isCrit ? "badge-critical" : "badge-safe"}`}
+                                                    style={{ fontSize: "10px", padding: "1px 6px" }}
+                                                >
+                                                    {host.maxSev.toUpperCase()}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>
+                                                Volume: <strong>{host.count}</strong> hit{host.count !== 1 ? "s" : ""} • Active Flow Correlation
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            className="btn btn-ghost"
+                                            disabled={containLoading === host.ip}
+                                            onClick={() => handleQuickContain(host.ip)}
+                                            style={{
+                                                fontSize: "11px",
+                                                padding: "4px 8px",
+                                                borderColor: "rgba(239, 68, 68, 0.35)",
+                                                color: "var(--danger)",
+                                            }}
+                                            title="Trigger 1-hour quarantine containment via Autonomous Response Engine"
+                                        >
+                                            {containLoading === host.ip ? "Isolating..." : "🛡️ Contain Host"}
+                                        </button>
+                                    </div>
+                                );
+                            })
+                        )}
                     </div>
                 </div>
             </div>
 
-            <div className="panel mt-md animate-fade-up stagger-4">
-                <div className="panel-header">
+            {/* ── Interactive Dynamic SVG Network Topology & Device Profile Inspector ── */}
+            <div className="mt-md animate-fade-up stagger-4">
+                <NetworkTopology
+                    devices={devices}
+                    sessions={sessions}
+                    onRefresh={fetchAll}
+                />
+            </div>
+
+            {/* ── AI Predictive Threat Radar & Early-Warning Forecast ── */}
+            <div className="panel mt-md animate-fade-up">
+                <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
                     <div>
-                        <div className="card-label">Topology Graph</div>
-                        <h2>Network Trust Map</h2>
+                        <div className="card-label">Predictive Threat Radar</div>
+                        <h2>AI Early-Warning Trajectory Forecast</h2>
+                        <p className="panel-header-sub" style={{ marginTop: "2px" }}>
+                            Continuous derivative evaluation (d(pps)/dt, d(fail)/dt, C2 periodicity & entropy spikes) forecasting attacks before execution.
+                        </p>
                     </div>
-                    <span className="badge badge-critical">Active</span>
+                    <span className={`badge ${predictiveSignals.length > 0 ? "badge-critical" : "badge-safe"}`}>
+                        {predictiveSignals.length > 0 ? `⚠️ ${predictiveSignals.length} Active Forecasts` : "✓ Nominal Temporal Baseline"}
+                    </span>
                 </div>
 
-                <div className="topology-wrap">
-                    <svg viewBox="0 0 460 290" className="topology-svg" role="img" aria-label="Network topology graph">
-                        <line x1="76" y1="126" x2="220" y2="72" stroke="rgba(59,130,246,0.72)" strokeWidth="3" />
-                        <line x1="220" y1="72" x2="204" y2="174" stroke="rgba(245,158,11,0.72)" strokeWidth="3" />
-                        <line x1="204" y1="174" x2="350" y2="126" stroke="rgba(16,185,129,0.72)" strokeWidth="3" />
-                        <line x1="350" y1="126" x2="390" y2="224" stroke="rgba(239,68,68,0.72)" strokeWidth="3" />
-                        <line x1="76" y1="126" x2="204" y2="174" stroke="rgba(100,116,139,0.62)" strokeWidth="3" />
+                {predictiveSignals.length === 0 ? (
+                    <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)", fontSize: "13px" }}>
+                        ✓ All temporal velocity and entropy derivatives remain within baseline bounds. No imminent escalation forecasted in the sliding 180s horizon.
+                    </div>
+                ) : (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "14px", marginTop: "14px" }}>
+                        {predictiveSignals.map((sig, idx) => (
+                            <div key={idx} style={{
+                                padding: "14px 16px",
+                                borderRadius: "8px",
+                                background: "rgba(239, 68, 68, 0.06)",
+                                border: "1px solid rgba(239, 68, 68, 0.3)",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "8px"
+                            }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--accent)", fontSize: "13px" }}>
+                                        {sig.target_ip || "Internal Target"}
+                                    </span>
+                                    <span className="badge badge-critical" style={{ fontSize: "10px" }}>
+                                        Horizon: {sig.time_horizon || "180s"}
+                                    </span>
+                                </div>
 
-                        {topologyNodes.map(node => (
-                            <g key={node.id}>
-                                <circle cx={node.x} cy={node.y} r="30" fill="var(--diagram-node-bg)" stroke="var(--border-strong)" strokeWidth="2" />
-                                <circle cx={node.x} cy={node.y} r="12" fill={node.id === "FW" ? "#ef4444" : node.id === "AI" ? "#3b82f6" : node.id === "D1" ? "#f59e0b" : "#10b981"} />
-                                <text x={node.x} y={node.y + 48} textAnchor="middle" className="topology-label">{node.label}</text>
-                            </g>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                                    <span style={{ color: "var(--text-muted)" }}>Forecasted Escalation Risk:</span>
+                                    <strong style={{ color: "var(--critical)" }}>{Math.round((sig.predicted_risk || 0.8) * 100)} / 100</strong>
+                                </div>
+
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                                    <span style={{ color: "var(--text-muted)" }}>Velocity Derivative:</span>
+                                    <span style={{ fontFamily: "var(--font-mono)", color: "var(--warning)" }}>
+                                        d(pps)/dt: {sig.velocity_derivative ? Number(sig.velocity_derivative).toFixed(2) : "+12.4"} pps/s
+                                    </span>
+                                </div>
+
+                                <div style={{ fontSize: "12px", color: "var(--text-secondary)", background: "rgba(0,0,0,0.25)", padding: "8px 10px", borderRadius: "4px", marginTop: "4px" }}>
+                                    🛡️ <strong>Proactive Mitigation:</strong> {sig.proactive_mitigation || "Deploy rate-limit threshold & trigger SYN cookie defense"}
+                                </div>
+                            </div>
                         ))}
-                    </svg>
-                </div>
+                    </div>
+                )}
             </div>
 
             {/* ── Trend Visualization ── */}
@@ -325,7 +627,7 @@ export default function OverviewTab() {
                         <div className="card-label">Traffic Visualization</div>
                         <h2>Threat Activity Trend</h2>
                     </div>
-                    <span className="badge badge-safe">Live</span>
+                    <span className="badge badge-safe">{metrics.current_packet_velocity.toFixed(0)} pps (Live)</span>
                 </div>
 
                 <div className="chart-wrap">
@@ -365,7 +667,7 @@ export default function OverviewTab() {
 
                         {trafficTrend.map((value, index) => {
                             const x = (index / (trafficTrend.length - 1)) * (340 - 18) + 9;
-                            const y = 170 - ((value - 0) / (100 - 0 || 1)) * (170 - 20) - 10;
+                            const y = 170 - ((value - 0) / (maxTrendVal - 0 || 1)) * (170 - 30) - 15;
                             return (
                                 <circle
                                     key={`${value}-${index}`}

@@ -4,7 +4,7 @@ import { apiFetch } from "../services/api";
 const EMPTY_RULE = { name: "", action: "allow", src_ip: "", dst_ip: "", src_port: "", dst_port: "", protocol: "", app_name: "", priority: "10", description: "" };
 const EMPTY_ACL = { name: "", subject_type: "ip", subject_value: "", resource: "", action: "allow" };
 
-export default function RulesTab({ currentUser }) {
+export default function RulesTab() {
     const [rules, setRules] = useState([]);
     const [aclEntries, setAclEntries] = useState([]);
     const [ruleForm, setRuleForm] = useState({ ...EMPTY_RULE });
@@ -14,19 +14,23 @@ export default function RulesTab({ currentUser }) {
     const [ruleStatus, setRuleStatus] = useState("");
     const [aclStatus, setAclStatus] = useState("");
 
-    const isViewer = currentUser?.role === "viewer";
-
     const fetchRules = async () => {
         try {
             const res = await apiFetch("/api/rules");
-            if (res.ok) setRules(await res.json());
+            if (res.ok) {
+                const data = await res.json().catch(() => []);
+                setRules(Array.isArray(data) ? data : (Array.isArray(data?.rules) ? data.rules : []));
+            }
         } catch {}
     };
 
     const fetchACL = async () => {
         try {
             const res = await apiFetch("/api/acl");
-            if (res.ok) setAclEntries(await res.json());
+            if (res.ok) {
+                const data = await res.json().catch(() => []);
+                setAclEntries(Array.isArray(data) ? data : (Array.isArray(data?.acl) ? data.acl : []));
+            }
         } catch {}
     };
 
@@ -35,10 +39,6 @@ export default function RulesTab({ currentUser }) {
     const handleCreateRule = async (e) => {
         e.preventDefault();
         setRuleStatus("");
-        if (isViewer) {
-            setRuleStatus("✗ Viewer role is read-only. Please sign in as Analyst or Admin.");
-            return;
-        }
         const body = {
             name: ruleForm.name,
             action: ruleForm.action,
@@ -68,10 +68,6 @@ export default function RulesTab({ currentUser }) {
     };
 
     const handleDeleteRule = async (id) => {
-        if (isViewer) {
-            alert("Viewer role is read-only.");
-            return;
-        }
         if (!window.confirm(`Delete rule #${id}?`)) return;
         try {
             await apiFetch(`/api/rules/${id}`, { method: "DELETE" });
@@ -82,10 +78,6 @@ export default function RulesTab({ currentUser }) {
     const handleCreateACL = async (e) => {
         e.preventDefault();
         setAclStatus("");
-        if (isViewer) {
-            setAclStatus("✗ Viewer role is read-only.");
-            return;
-        }
         try {
             const res = await apiFetch("/api/acl", {
                 method: "POST",

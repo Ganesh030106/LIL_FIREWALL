@@ -11,6 +11,8 @@
     --bg-root:       #060910;
     --bg-sidebar:    #0a0e16;
     --bg-surface:    #0d1219;
+    --bg-card:       #0d1219;
+    --bg-card-hover: #131b26;
     --bg-elevated:   #111822;
     --bg-panel:      rgba(14, 20, 30, 0.78);
     --bg-glass:      rgba(17, 24, 36, 0.62);
@@ -90,6 +92,8 @@
     --bg-root:       #edf3fb;
     --bg-sidebar:    #f7faff;
     --bg-surface:    #ffffff;
+    --bg-card:       #ffffff;
+    --bg-card-hover: #f1f5f9;
     --bg-elevated:   #f4f7fb;
     --bg-panel:      rgba(255, 255, 255, 0.96);
     --bg-glass:      rgba(255, 255, 255, 0.78);
@@ -755,6 +759,12 @@ h3 { font-size: 1rem; font-weight: 600; }
     border-color: rgba(239, 68, 68, 0.3);
 }
 
+.badge-danger {
+    color: var(--badge-critical-text);
+    background: var(--critical-soft);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
 .badge-high {
     color: var(--badge-high-text);
     background: var(--high-soft);
@@ -903,6 +913,30 @@ h3 { font-size: 1rem; font-weight: 600; }
     background: linear-gradient(180deg, rgba(239, 68, 68, 0.2), rgba(185, 28, 28, 0.3));
     color: var(--critical);
     font-weight: 600;
+}
+
+.btn-critical {
+    border-color: rgba(239, 68, 68, 0.6);
+    background: linear-gradient(180deg, #dc2626, #991b1b);
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);
+}
+
+.btn-critical:hover {
+    filter: brightness(1.12);
+    box-shadow: 0 6px 20px rgba(220, 38, 38, 0.45);
+}
+
+.btn-secondary {
+    border-color: var(--border-strong);
+    background: var(--surface-strong);
+    color: var(--text);
+}
+
+.btn-secondary:hover {
+    border-color: var(--accent);
+    background: var(--bg-hover);
 }
 
 .btn-danger:hover {
@@ -1518,4 +1552,206 @@ textarea.form-input {
     from { transform: scale(0.94); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ENTERPRISE SOC EXTENSIONS: POSTURE, MITRE, XAI & DRAWER
+   ═══════════════════════════════════════════════════════════ */
+
+/* Top Command Center Status Bar */
+.soc-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(10, 16, 28, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 210, 255, 0.18);
+    border-radius: var(--radius-md);
+    padding: 10px 18px;
+    margin-bottom: 22px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.soc-posture-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 210, 255, 0.08);
+    border: 1px solid rgba(0, 210, 255, 0.35);
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.soc-posture-grade {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--safe);
+    color: #000;
+    font-weight: 800;
+    font-size: 0.78rem;
+    box-shadow: 0 0 10px var(--safe);
+}
+
+.soc-posture-grade.grade-a { background: #10b981; color: #000; }
+.soc-posture-grade.grade-b { background: #f59e0b; color: #000; }
+.soc-posture-grade.grade-c { background: #f97316; color: #000; }
+.soc-posture-grade.grade-d { background: #ef4444; color: #fff; }
+
+/* MITRE ATT&CK Badges */
+.mitre-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Incident Investigation Drawer */
+.incident-drawer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(6px);
+    z-index: 999;
+    display: flex;
+    justify-content: flex-end;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.incident-drawer {
+    width: 100%;
+    max-width: 560px;
+    height: 100vh;
+    background: #090e1a;
+    border-left: 1px solid rgba(0, 210, 255, 0.25);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.65);
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+/* XAI Feature Contribution Bars */
+.xai-bar-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.xai-bar-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.xai-bar-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    margin-bottom: 4px;
+}
+
+.xai-bar-track {
+    width: 100%;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.xai-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+/* Command Palette (Ctrl+K) */
+.cmd-palette-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 14vh;
+}
+
+.cmd-palette-box {
+    width: 100%;
+    max-width: 580px;
+    background: #0d1526;
+    border: 1px solid rgba(0, 210, 255, 0.35);
+    border-radius: var(--radius-md);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 210, 255, 0.15);
+    overflow: hidden;
+    animation: scaleUp 0.18s ease-out;
+}
+
+.cmd-palette-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 16px 20px;
+    color: var(--text);
+    font-size: 1.05rem;
+    outline: none;
+    font-family: var(--font-ui);
+}
+
+.cmd-palette-results {
+    max-height: 340px;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.cmd-palette-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+}
+
+.cmd-palette-item:hover, .cmd-palette-item.active {
+    background: rgba(0, 210, 255, 0.12);
+    color: var(--text);
+    transform: translateX(4px);
+}
+
 

@@ -1,29 +1,28 @@
-# AI-Powered Contextual Firewall for Traffic Anomaly Detection
+# Volcano AI Firewall V5.0 — Next-Generation Autonomous SOC Platform
 
-> Next-Generation Context-Aware AI Firewall, Real-Time Network Threat Defense Console, and Automated Incident Response System.
+> Next-Generation Autonomous SOC Platform, Predictive Cyber Defense Console, and Multi-Signal Threat Correlation Engine.
 
-**AI-Powered Contextual Firewall for Traffic Anomaly Detection** is an enterprise-grade network security platform combining **Scapy live packet inspection**, **FastAPI high-concurrency microservices**, a **React 18 + Vite cyber operations console**, **scikit-learn machine learning classifiers**, **real-time WebSocket telemetry**, and an **autonomous AI response engine** with strict allowlist safety.
+**Volcano AI Firewall V5.0** is an enterprise-grade cyber defense platform uniting **Scapy real-time packet inspection**, **FastAPI high-concurrency microservices**, a **React 18 + Vite cyber operations console**, **PyTorch LSTM temporal sequence models**, **Isolation Forest flow anomaly scoring**, **predictive early-warning telemetry**, **multi-signal threat correlation**, and an **autonomous mitigation engine** with safe allowlists and automatic sliding-TTL rollback.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18.2-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-5.4-646CFF.svg?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
-[![Tests](https://img.shields.io/badge/Tests-131%2B%20Passing-brightgreen.svg)](#automated-testing)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python: 3.8+](https://img.shields.io/badge/Python-3.8%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI: 0.115](https://img.shields.io/badge/FastAPI-0.115-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React: 18.3](https://img.shields.io/badge/React-18.3-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
+[![Vite: 5.4+](https://img.shields.io/badge/Vite-5.4%2B-646CFF.svg?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Docker: Ready](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Tests: 150 Passing](https://img.shields.io/badge/Tests-150%20Passing-brightgreen.svg)](#automated-testing)
+[![E2E Tab Tests: 41/41 Passing](https://img.shields.io/badge/E2E%20Tab%20Suite-41%2F41%20Passing-brightgreen.svg)](docs/TESTING_GUIDE.md)
 
 ---
 
 ## Table of Contents
 
 - [Core Architectural Highlights](#core-architectural-highlights)
-- [New Features & Modern Capabilities](#new-features--modern-capabilities)
-- [Default Operator Credentials & RBAC](#default-operator-credentials--rbac)
+- [New Features & V5.0 Capabilities](#new-features--v50-capabilities)
 - [Quickstart: One-Command Startup](#quickstart-one-command-startup)
-- [Docker & Containerized Deployment](#docker--containerized-deployment)
-- [Automated Testing](#automated-testing)
-- [Detection Engines & Intelligence](#detection-engines--intelligence)
+- [Automated Testing & Tab Verification](#automated-testing--tab-verification)
 - [Autonomous Response & Safe Containment](#autonomous-response--safe-containment)
+- [Detection Engines & Intelligence](#detection-engines--intelligence)
 - [Grounded AI Security Copilot](#grounded-ai-security-copilot)
 - [PCAP Forensics & Wireshark Buffer](#pcap-forensics--wireshark-buffer)
 - [API Reference & WebSocket Events](#api-reference--websocket-events)
@@ -36,80 +35,64 @@
 ## Core Architectural Highlights
 
 ```text
- ┌─────────────────────────────────────────────────────────────┐
- │               React 18 + Vite Cyber Console                 │
- │  (Overview, Alerts Triage, Rules, AI Intel, Tools, Settings)│
- └──────────────┬──────────────────────────────▲───────────────┘
-                │ REST API (JSON/JWT)          │ WebSockets (/ws/events)
-                ▼                              │ (2s live metrics push)
- ┌─────────────────────────────────────────────┴───────────────┐
- │    Contextual Firewall FastAPI Backend Core         │
- │                                                             │
- │ ┌──────────────────┐  ┌────────────────┐  ┌───────────────┐ │
- │ │  Scapy Sniffer   │  │ Threat Engine  │  │ Response Eng. │ │
- │ │  Rolling PCAP    │  │ Brute Force    │  │ Auto-Block    │ │
- │ │  Ring Buffer     │  │ DNS Tunnel/DGA │  │ Auto-Unblock  │ │
- │ │  (1000 Packets)  │  │ Phishing (10F) │  │ Allowlist Safe│ │
- │ └────────┬─────────┘  └───────┬────────┘  └───────┬───────┘ │
- │          │                    │                   │         │
- │ ┌────────▼────────────────────▼───────────────────▼───────┐ │
- │ │   Dual-Engine Storage: SQLite (WAL) / PostgreSQL 16      │ │
- │ │   Alembic Migrations + Role-Based Access Control (RBAC) │ │
- │ └─────────────────────────────────────────────────────────┘ │
- └─────────────────────────────────────────────────────────────┘
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                     React 18 + Vite Cyber Operations Console                │
+ │  (Overview, Incidents, Alerts Triage, Rules, Network, Threat Intel, Tools) │
+ └──────────────┬──────────────────────────────────────────────▲───────────────┘
+                │ REST API (JSON)                              │ WebSockets (/ws/events)
+                ▼                                              │ (Sub-second live telemetry)
+ ┌─────────────────────────────────────────────────────────────┴───────────────┐
+ │               Volcano AI Firewall V5.0 Backend Core                         │
+ │                                                                             │
+ │ ┌──────────────────┐  ┌─────────────────────┐  ┌──────────────────────────┐ │
+ │ │ Scapy Sniffer    │  │ Multi-Stage AI ML   │  │ Autonomous Mitigation    │ │
+ │ │ Rolling PCAP     │  │ IsoForest Anomaly   │  │ 1-Click Containment      │ │
+ │ │ Ring Buffer      │  │ PyTorch Recurrent   │  │ Safe Allowlists          │ │
+ │ │ (1,000 Packets)  │  │ Random Forest Phish │  │ Auto-Unblock Daemon      │ │
+ │ └────────┬─────────┘  └──────────┬──────────┘  └────────────┬─────────────┘ │
+ │          │                       │                          │               │
+ │ ┌────────▼───────────────────────▼──────────────────────────▼─────────────┐ │
+ │ │ Threat Correlation Engine & Predictive Early-Warning Signals Radar      │ │
+ │ │ Dual Storage Engine: SQLite (WAL) / PostgreSQL 16 + Audit Trail         │ │
+ │ └─────────────────────────────────────────────────────────────────────────┘ │
+ └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-1. **Dual Storage Engine**: Zero-configuration SQLite with Write-Ahead Logging (`WAL` mode) for lightweight local deployments, with automatic connection pooling to PostgreSQL 16 when `DATABASE_URL` is configured.
-2. **Real-time Push Telemetry**: High-frequency WebSocket server (`/ws/events`) broadcasting packet velocity, threat indices, device discoveries, and alert occurrences every 2 seconds.
-3. **Fail-Safe Operation**: Every external subsystem (GeoLite2 MMDB, LLM APIs, external threat feeds, Scapy live capture) degrades gracefully without crashing the server.
+1. **Autonomous SOC Platform**: 8 mission-control operational tabs covering high-level overview, incident correlation, live alerts, 5-tuple firewall policies, network sessions, threat intelligence, security tools, and forensic history.
+2. **Tactical Defense Radar**: Includes the **Active Attack Vector Defense Radar** and **Top Talkers & Host Risk Radar** with direct 1-click autonomous host containment.
+3. **Predictive Early Warning**: Computes abnormal velocity, periodic beaconing, and deviation from historical baselines before breach confirmation.
+4. **Multi-Signal Incident Correlation**: Automatically groups related alerts into unified incidents with MITRE ATT&CK attack progression timelines.
+5. **Streamlined Direct Administration**: Zero login barriers for operators; complete operational control across all tabs backed by an immutable background audit log.
+6. **Dual Storage Engine**: Zero-configuration SQLite with Write-Ahead Logging (`WAL` mode) for lightweight local deployments, with automatic connection pooling to PostgreSQL 16 when `DATABASE_URL` is configured.
 
 ---
 
-## New Features & Modern Capabilities
+## New Features & V5.0 Capabilities
 
-- 🔐 **Direct Bcrypt Authentication & RBAC**: JWT Bearer token security supporting `admin`, `analyst`, and `viewer` roles with audit logging of all sensitive operations.
-- 🎯 **Interactive Alert Triage**: Filter alerts by severity and status (`new`, `in_progress`, `resolved`, `false_positive`), assign alerts to operators, record investigation notes, and apply bulk actions.
-- 🔨 **Sliding-Window Brute-Force Detector**: Real-time connection tracking on authentication ports (22 SSH, 3389 RDP, 21 FTP, 445 SMB, Databases) generating targeted containment rules.
-- 📡 **DNS Threat & Tunneling Engine**: Shannon entropy computation detecting data exfiltration over subdomains (length > 45, entropy > 3.8) and algorithmically generated domains (DGA).
-- 🎣 **10-Feature Machine Learning Phishing Classifier**: Lexical analysis extracting length, domain entropy, IP literals, punycode, URL shorteners, and suspicious TLD patterns. Retrainable via CLI (`python model_generator.py --dataset path.csv`).
-- 🌐 **Dynamic Threat Intelligence Feeds**: Ingestion of abuse.ch Feodo Tracker botnet C2s, URLhaus malware distribution, and local blocklists with graceful offline caching.
-- 🌍 **GeoIP Geolocation Enrichment**: MaxMind GeoLite2 lookup enriching threat metadata with country, city, and coordinates, with local network fallback.
-- 🛡️ **Autonomous Response with Safe Allowlist**: Prohibits blocking loopback (`127.0.0.1`), network gateways, DNS resolvers, and operator-defined subnets. Background daemon thread automatically expires and deletes temporary block rules.
-- 📣 **Multi-Channel Incident Notifier**: Dispatches structured alerts with cooldown throttling to Slack, Discord, Telegram, and SMTP Email.
-- 🤖 **Grounded AI Security Copilot**: Context-aware incident analyst synthesizing live firewall telemetry (threat score, active rules, recent alerts) into actionable remediation guidance.
-- 📦 **Rolling PCAP Forensics Buffer**: In-memory ring buffer capturing the last 1,000 raw packets with Wireshark `.pcap` export for the entire stream or specific security incidents.
-- 🔍 **Defensive Port Scanner & Vulnerability Assessment**: Multi-threaded TCP connect scanner, service banner interrogation, and curated signature database correlating discovered exposures with known CVEs (EternalBlue, regreSSHion, Redis RCE, Apache Traversal), CVSS scoring, and 1-click firewall block remediation.
-- 🛡️ **Layer-7 Deep Packet Inspection (DPI)**: Real-time application payload analysis intercepting SQL Injection (SQLi), Cross-Site Scripting (XSS), Directory Path Traversal, and Remote Command Injection in HTTP and raw socket streams with URL-decode normalization.
-- 🪤 **Canary Honeytoken Tripwires & Ransomware Shield**: Automatic placement of decoy honeytoken files (`.canary_system_vault.docx`, `passwords_canary_honeytoken.xlsx`) with instant critical alerts on unauthorized tampering and known ransomware file encryption extension matching (`.locked`, `.crypto`, `.wnry`).
-- 🌲 **Multi-Variate & Temporal AI Anomaly Scorers**: Unsupervised Isolation Forest (`/api/anomaly-score`) evaluating multi-variate flow metrics and PyTorch LSTM (`/api/lstm-flow-score`) evaluating temporal recurrent packet sequence bursts.
-
----
-
-## Default Operator Credentials & RBAC
-
-When first started, the firewall automatically initializes the database schema and seeds 3 default operator accounts:
-
-| Username | Default Password | Role | Permissions |
-| :--- | :--- | :--- | :--- |
-| **`admin`** | `admin123` | **`admin`** | Full administrative rights: manage settings, create/edit users, modify firewall rules, trigger containment, inspect audit logs, download PCAP. |
-| **`analyst`** | `analyst123` | **`analyst`** | Operational rights: triage alerts, assign investigations, query AI copilot, create rules, inspect network traffic. |
-| **`viewer`** | `viewer123` | **`viewer`** | Read-only rights: inspect live telemetry, view dashboards, review historical metrics. |
-
-> [!TIP]
-> In production, change the default passwords immediately from the **Settings** tab or using the `/api/auth/users` API.
+- 🎯 **Security Incidents Workspace**: Dedicated incident management interface with status lifecycles (`New`, `Investigating`, `Contained`, `Resolved`, `False Positive`), analyst notes, and MITRE ATT&CK attack path visualization.
+- 📡 **Predictive Threat Early-Warning Radar**: Early detection engine analyzing login failure acceleration, unusual outbound burst volume, and microsecond beaconing rhythms (`/api/predictive/signals`).
+- 🛡️ **Active Attack Vector Defense Radar**: Real-time visual radar replacing obsolete static charts, monitoring SYN floods, port scans, DNS tunnels, web injection payloads, and credential stuffing.
+- 💻 **Top Talkers & Host Risk Radar**: Live bandwidth consumption and endpoint risk tracking with direct 1-click autonomous host containment.
+- 🌲 **Multivariate Flow Anomaly Scorer**: Unsupervised Isolation Forest (`/api/anomaly-score`) scoring multi-variate packet metrics without requiring prior attack labels.
+- 🧠 **PyTorch Deep Recurrent LSTM Sequence Scorer**: Multi-layer recurrent neural network evaluating sequential inter-arrival timing ($\Delta t$) and byte size rhythms (`/api/lstm-flow-score`).
+- 🔍 **Explainable AI (XAI) Feature Attribution**: Decomposes ML model outputs into positive and negative feature contributions with supporting network evidence (`/api/ai/explain`).
+- 🎣 **16-Feature Random Forest Phishing Classifier**: Lexical analysis extracting length, domain entropy, IP literals, punycode, URL shorteners, and keyword densities (`/api/check-url`).
+- 🪤 **Canary Honeytoken Tripwires & Ransomware Defense**: Decoy honeytokens (`.canary_system_vault.docx`) with instant critical alerts on unauthorized access, base64 byte entropy inspection, and ransomware extension matching.
+- 🛡️ **Safe Autonomous Containment with TTL Rollback**: Prohibits blocking loopback (`127.0.0.1`), network gateways, DNS resolvers, and operator subnets. Sliding-TTL daemon automatically expires and deletes temporary block rules.
+- 📦 **Rolling PCAP Forensics Buffer**: In-memory ring buffer capturing the last 1,000 raw packets with direct Wireshark `.pcap` export (`/api/pcap/export`).
 
 ---
 
 ## Quickstart: One-Command Startup
 
-The single launcher `python run.py` automatically checks your Python and Node environments, installs dependencies, trains the baseline phishing model if missing, migrates database tables, and starts both services:
+The single launcher `python run.py` automatically checks your Python and Node environments, installs dependencies, trains baseline ML models if absent, migrates database tables, and boots both FastAPI and Vite servers:
 
 ```bash
 # Clone the repository
 git clone https://github.com/your-username/contextual-ai-firewall.git
 cd contextual-ai-firewall
 
-# Single-command setup and launch
+# Single-command setup, migration, and launch
 python run.py
 ```
 
@@ -123,94 +106,15 @@ Press `Ctrl+C` in the terminal to cleanly shut down both servers.
 
 ---
 
-## Docker & Containerized Deployment
+## Automated Testing & Tab Verification
 
-Run the AI-Powered Contextual Firewall along with a dedicated PostgreSQL 16 database using Docker Compose:
+The platform includes two comprehensive testing suites:
 
+### 1. Backend Unit Test Suite (150/150 Tests Passing)
+Covers detection algorithms, allowlist containment safety, threat feeds, and packet forensics:
 ```bash
-# Copy and customize environment variables
-cp .env.example .env
-
-# Build and start services in background
-docker compose up -d --build
-
-# View real-time logs
-docker compose logs -f firewall
-```
-
-Stop services:
-```bash
-docker compose down
-```
-
----
-
-## Automated Testing
-
-The firewall platform includes a comprehensive automated test suite powered by `pytest` covering authentication, detection algorithms, allowlist containment safety, threat feeds, and packet forensics:
-
-```bash
-# Run the complete test suite
 python -m pytest backend/tests -v
 ```
-
-**Test Coverage Summary:**
-- `test_scanner_and_vulns.py`: Multi-threaded TCP port scanner, banner grabbing, CVE vulnerability catalogue, CVSS scoring, Layer-7 DPI (SQLi/XSS/Traversal/Cmd), and canary tripwires.
-- `test_idp_missing_features.py`: Isolation Forest traffic anomaly detector, file download & ransomware inspector, application-aware rules, PyTorch LSTM sequence scorer, and compliance reporting.
-- `test_auth.py`: Bcrypt password hashing, JWT token lifecycle, seeded accounts, user CRUD.
-- `test_detections.py`: Brute-force sliding windows, DNS entropy, tunneling detection, DGA analysis, 10-feature phishing model.
-- `test_allowlist_response.py`: Allowlist protection, loopback safety, auto-unblock expiration daemon thread.
-- `test_feeds.py`: Threat feed parsing, offline degradation, GeoIP private subnet resolution.
-- `test_pcap.py`: Ring buffer packet queuing, capacity boundary, PCAP binary export magic bytes.
-- `test_triage.py`: Alert lifecycle, assignment, status updates, bulk operations, audit logging.
-
----
-
-## Detection Engines & Intelligence
-
-### 1. Brute Force Detection
-Monitors high-risk authentication ports (22 SSH, 3389 RDP, 21 FTP, 445 SMB, 1433 MSSQL, 3306 MySQL, 5432 Postgres, 6379 Redis). Connection counts are calculated inside a rolling sliding window (default: 5 attempts in 10 seconds). Breaches generate an immediate `critical` alert with suggested containment rules.
-
-### 2. DNS Threat Inspection
-- **DNS Tunneling**: Identifies queries with abnormally long subdomains (> 45 chars) and high Shannon entropy (> 3.8 bits/char), typical of C2 exfiltration tools (e.g. `dnscat2`, `iodine`).
-- **DGA Domains**: Flags pseudo-random domains generated by malware algorithms via consonant/vowel ratio analysis and base domain entropy.
-- **Query Spike Detection**: Monitors query frequency per internal host to detect fast-flux DNS traffic.
-
-### 3. Phishing ML Detector
-Extracts a 10-feature vector from URLs:
-`[url_length, domain_length, subdomain_count, domain_entropy, digit_ratio, has_raw_ip, is_shortener, is_punycode, suspicious_tld, keyword_density]`
-Retrain with your own dataset:
-```bash
-python backend/model_generator.py --dataset path/to/dataset.csv --output backend/phishing_model.joblib
-```
-
-### 4. Defensive Port Scanning & CVE Vulnerability Assessment
-- **Multi-Threaded TCP Port Scanner**: Discovers open ports and extracts service banners (`HEAD /`, SSH version identifiers, Telnet greetings, Redis `PING`, Memcached `version`).
-- **Curated Signature Database**: Automatically correlates discovered services and banners against high-impact CVEs and CWEs:
-  - Exposed SMB (CVE-2017-0144 EternalBlue / WannaCry lateral vector)
-  - Unauthenticated Redis in-memory store RCE (CVE-2022-0543)
-  - Cleartext Telnet & FTP credentials exposure (CWE-319)
-  - Exposed database endpoints (MongoDB, MySQL, PostgreSQL, MSSQL, Elasticsearch)
-  - OpenSSH regreSSHion signal vulnerability (CVE-2024-6387)
-  - Apache HTTP Server path traversal and RCE (CVE-2021-41773)
-  - Memcached UDP amplification DDoS reflector (CVE-2018-1000115)
-- **1-Click Firewall Remediation**: Directly injects targeted `DROP` firewall rules to instantly shield vulnerable open ports.
-
-### 5. Layer-7 Deep Packet Inspection (DPI)
-Inspects active TCP payloads and HTTP request streams in real-time, decoding URL-encoded characters and flagging web attacks:
-- **SQL Injection (SQLi)**: Union select queries, boolean blind patterns (`' OR 1=1`), time delays (`WAITFOR DELAY`, `SLEEP`).
-- **Cross-Site Scripting (XSS)**: Inline script tags, DOM event injections (`onerror=`, `onload=`), cookie theft attempts.
-- **Directory Path Traversal**: Encoded traversal sequences (`../../`), sensitive file access (`/etc/passwd`, `win.ini`).
-- **Remote Command Injection**: Shell execution pivots (`; id`, `| bash`, `powershell -enc`, `cmd.exe /c`).
-
-### 6. Canary Honeytoken Tripwires & Filesystem Ransomware Defense
-- **Honeytoken Decoy Placement**: Deploys decoy canary files (`.canary_system_vault.docx`, `passwords_canary_honeytoken.xlsx`) in watched directories.
-- **Instant Tripwire Alerting**: Immediately triggers a `critical` ransomware alert upon any modification or renaming of canary honeytokens.
-- **File Encryption Detection**: Scans for known ransomware encryption extensions (`.locked`, `.crypto`, `.wnry`, `.lockbit`, `.blackcat`) and rapid file modification velocity.
-
-### 7. Multi-Variate & Temporal Anomaly Scorers
-- **Isolation Forest Flow Scorer** (`/api/anomaly-score`): Analyzes multi-variate metrics (packet size, ports, protocol, flow rate) against an unsupervised isolation forest baseline.
-- **PyTorch LSTM Sequence Scorer** (`/api/lstm-flow-score`): Evaluates recurrent temporal packet sequences (inter-arrival microsecond intervals, packet sizes, flow directions) to uncover stealthy burst and flood attacks.
 
 ---
 
@@ -219,8 +123,37 @@ Inspects active TCP payloads and HTTP request streams in real-time, decoding URL
 The `ResponseEngine` automatically mitigates threats while strictly enforcing safety guardrails:
 
 1. **Allowlist Invariant**: Addresses in `VOLCANO_ALLOWLIST_IPS` (plus loopback `127.0.0.1`, `::1`, and local gateway interfaces) can **never** be blocked, even if requested by an automated engine or manual operator.
-2. **Auto-Expiring Containment**: Dynamic blocks are injected with an expiration timestamp. A background daemon thread periodically polls for expired rules and deletes them, preventing permanent firewall rule bloat.
-3. **Manual Override**: Operators can manually block or unblock IPs through the **Firewall Rules** or **Settings** tabs.
+2. **Auto-Expiring Containment**: Dynamic blocks are injected with an expiration timestamp. A background daemon thread periodically sweeps for expired rules and deletes them, preventing permanent firewall rule bloat.
+3. **1-Click Manual Containment**: Operators can instantly contain or unblock hosts directly from the Overview, Alerts, or Network tabs.
+
+---
+
+## Detection Engines & Intelligence
+
+### 1. Predictive Threat Early Warning Radar
+Monitors early signals of anomalous behavior:
+- Accelerating authentication failures on administrative ports (SSH 22, RDP 3389, SMB 445).
+- Unusual outbound burst data transfers.
+- Repeated connection intervals with low jitter ($\le 0.15$).
+- Divergence from 168-hour moving behavioral baselines.
+
+### 2. Multi-Signal Threat Correlation Engine
+Groups related security alerts across sliding windows by source IP, target, and behavioral signature into cohesive incidents with MITRE ATT&CK progression timelines.
+
+### 3. Layer-7 Deep Packet Inspection (DPI)
+Inspects active TCP payloads and HTTP request streams in real-time, decoding URL-encoded characters and flagging web attacks:
+- **SQL Injection (SQLi)**: Union select queries, boolean blind patterns (`' OR 1=1`), time delays (`WAITFOR DELAY`, `SLEEP`).
+- **Cross-Site Scripting (XSS)**: Inline script tags, DOM event injections (`onerror=`, `onload=`), cookie theft attempts.
+- **Directory Path Traversal**: Encoded traversal sequences (`../../`), sensitive file access (`/etc/passwd`, `win.ini`).
+- **Remote Command Injection**: Shell execution pivots (`; id`, `| bash`, `powershell -enc`, `cmd.exe /c`).
+
+### 4. Shannon Entropy DNS Threat Hunter
+- **DNS Tunneling**: Identifies queries with abnormally long subdomains (> 45 chars) and high Shannon entropy (> 3.8 bits/char), typical of C2 exfiltration tools (`dnscat2`, `iodine`).
+- **DGA Domains**: Flags pseudo-random domains generated by malware algorithms via consonant/vowel ratio analysis and base domain entropy.
+
+### 5. Multi-Variate & Temporal Anomaly Scorers
+- **Isolation Forest Flow Scorer** (`/api/anomaly-score`): Analyzes multi-variate metrics (packet size, ports, protocol, flow rate) against an unsupervised isolation forest baseline.
+- **PyTorch LSTM Sequence Scorer** (`/api/lstm-flow-score`): Evaluates recurrent temporal packet sequences (inter-arrival microsecond intervals, packet sizes, flow directions) to uncover stealthy burst and flood attacks.
 
 ---
 
@@ -244,49 +177,44 @@ The firewall engine maintains a circular rolling buffer of the last 1,000 raw ca
 
 ## API Reference & WebSocket Events
 
-### Authentication & Users
-- `POST /api/auth/login`: Authenticate and receive JWT Bearer token.
-- `GET /api/auth/me`: Inspect current authenticated user identity.
-- `GET /api/auth/users`: List registered operator accounts (Admin only).
-- `POST /api/auth/users`: Create a new operator account (Admin only).
-- `PUT /api/auth/users/{username}/role`: Update operator role (Admin only).
+| Category | Method & Route | Description |
+| :--- | :--- | :--- |
+| **System & Health** | `GET /api/health` | Healthcheck and core sensor readiness. |
+| | `GET /api/metrics` | Real-time packet velocity, file changes, and system stats. |
+| | `GET /api/threat-summary` | Unified risk score, threat level, and posture index. |
+| | `GET /api/database/status` | Database connection metrics (SQLite WAL / Postgres). |
+| **Predictive Signals** | `GET /api/predictive/signals` | Early-warning threat signals before breach confirmation. |
+| | `GET /api/baseline/traffic` | 168-hour moving behavioral baseline. |
+| **Incidents & Correlation** | `GET /api/incidents` | List correlated security incidents. |
+| | `POST /api/incidents` | Ingest new security incident. |
+| | `POST /api/incidents/correlate`| Execute multi-signal threat correlation. |
+| | `POST /api/incidents/{id}/notes`| Attach forensic investigation notes. |
+| **Autonomous Containment** | `POST /api/autonomous/block-ip` | 1-click host containment with safe allowlist verification. |
+| | `POST /api/autonomous/unblock-ip`| Rollback / lift host containment. |
+| | `POST /api/killswitch` | Emergency host isolation trigger (supports dry-run). |
+| **Alert Management** | `GET /api/alerts` | Query ingested alert buffer with filters. |
+| | `POST /api/alerts/bulk` | Bulk acknowledge, resolve, or dismiss alerts. |
+| **Firewall Policies** | `GET /api/rules` | List active 5-tuple firewall rules. |
+| | `POST /api/rules` | Deploy new 5-tuple firewall rule. |
+| | `DELETE /api/rules/{id}` | Decommission firewall rule. |
+| | `GET /api/acl` | Query subject-based access control list. |
+| | `POST /api/acl` | Add subject access control entry. |
+| **Network Sessions** | `GET /api/sessions` | Query active TCP sessions and sockets. |
+| | `GET /api/network/sessions` | Route alias for network session telemetry. |
+| | `GET /api/traffic` | Query temporal traffic history trends. |
+| **AI ML & Tools** | `POST /api/check-url` | 16-feature Random Forest phishing URL classifier. |
+| | `POST /api/check-file` | Base64 byte entropy ransomware inspector. |
+| | `POST /api/anomaly-score` | Multivariate Isolation Forest flow anomaly scorer. |
+| | `POST /api/lstm-flow-score` | PyTorch recurrent LSTM temporal sequence scorer. |
+| | `POST /api/ai/explain` | Explainable AI (XAI) feature contribution breakdown. |
+| | `POST /api/copilot/ask` | Grounded AI Security Copilot incident analyst. |
+| | `POST /api/scanner/port-scan` | Multi-threaded TCP port scanner and service grabber. |
+| | `POST /api/scanner/vuln-scan` | Automated CVE vulnerability assessment. |
+| **Forensics & PCAP** | `GET /api/pcap/stats` | Rolling 1,000-packet buffer capacity and utilization. |
+| | `GET /api/pcap/export` | Raw Wireshark binary `.pcap` capture stream export. |
+| | `GET /api/audit-logs` | Immutable administrative audit log trail. |
 
-### Alert Triage
-- `GET /api/alerts`: Retrieve alerts with status/severity filtering.
-- `PUT /api/alerts/{id}/triage`: Update status, assignee, and notes.
-- `POST /api/alerts/bulk`: Perform bulk resolve, dismiss, or delete actions.
-
-### Detection & Threat Intelligence
-- `GET /api/threats/feeds`: Retrieve sync status of threat feeds.
-- `POST /api/threats/feeds/refresh`: Trigger manual re-synchronization.
-- `GET /api/threats/lookup?target=...`: Query IP or domain against blocklists.
-- `GET /api/geoip/{ip}`: Query geolocation metadata.
-- `POST /api/security/dns/inspect`: Run static entropy and lexical analysis on a domain.
-
-### Port Scanner & Vulnerability Assessment
-- `POST /api/scanner/port-scan`: Execute multi-threaded TCP port scan and service banner grabbing.
-- `POST /api/scanner/vuln-scan`: Execute combined port scan and CVE vulnerability assessment.
-- `POST /api/scanner/vuln-audit`: Audit existing port findings against vulnerability database.
-- `GET /api/scanner/signatures`: List all vulnerability signatures, CVSS scores, and remediation rules.
-- `GET /api/scanner/history`: Retrieve recent port and vulnerability scan history log.
-
-### AI Flow Scoring & File Security
-- `POST /api/anomaly-score`: Evaluate multi-variate traffic flow metrics against Isolation Forest.
-- `POST /api/lstm-flow-score`: Score recurrent temporal packet sequences using PyTorch LSTM.
-- `POST /api/check-file`: Inspect files and downloads for ransomware heuristics, entropy, and double extensions.
-
-### Packet Forensics
-- `GET /api/pcap/stats`: Buffer capacity and metrics.
-- `GET /api/pcap/export`: Download Wireshark `.pcap` capture file.
-- `GET /api/alerts/{alert_id}/pcap`: Download forensic `.pcap` for an alert.
-
-### System Configuration
-- `GET /api/settings`: Fetch active thresholds and configurations.
-- `PUT /api/settings`: Update settings with real-time runtime propagation.
-- `POST /api/notifications/test`: Test Slack, Discord, Telegram, or Email notifications.
-- `GET /api/audit-logs`: Review administrative action logs.
-
-### WebSocket Stream
+### WebSocket Telemetry Stream
 Connect to `ws://localhost:8000/ws/events`:
 - `metrics_tick`: Broadcast every 2 seconds with packet velocity, threat indices, and alert counts.
 - `alert_created`: Pushed immediately when a new security alert is triggered.
@@ -325,8 +253,7 @@ All settings are tunable via environment variables or `backend/settings.json`:
 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
-| `VOLCANO_JWT_SECRET_KEY` | *(secure auto-key)* | Secret key for signing JWT tokens. |
-| `DATABASE_URL` | `sqlite:///volcano.db` | SQLite or PostgreSQL connection string. |
+| `DATABASE_URL` | `sqlite:///backend/volcano.db` | SQLite or PostgreSQL connection string. |
 | `VOLCANO_BRUTE_FORCE_THRESHOLD` | `5` | Failed attempts before triggering brute-force alert. |
 | `VOLCANO_BRUTE_FORCE_WINDOW` | `10` | Time window (seconds) for brute force tracking. |
 | `VOLCANO_DNS_TUNNELING_ENTROPY` | `3.8` | Shannon entropy threshold for DNS exfiltration. |
@@ -340,4 +267,4 @@ All settings are tunable via environment variables or `backend/settings.json`:
 
 ## License
 
-AI-Powered Contextual Firewall for Traffic Anomaly Detection is released under the [MIT License](LICENSE).
+Volcano AI Firewall V5.0 is released under the [MIT License](LICENSE).

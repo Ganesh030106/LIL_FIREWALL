@@ -1,0 +1,14 @@
+name: dns-tunneling-response
+description: Automated containment, PCAP attachment, and notification for high-entropy DNS exfiltration
+match:
+  category: DNS Tunneling Exfiltration
+  min_severity: high
+actions:
+  - type: block_ip
+    duration_seconds: 3600
+  - type: attach_pcap
+    packets: 400
+  - type: notify
+    channels: [slack, email]
+  - type: create_alert_note
+    note: DNS exfiltration channel quarantined; high-entropy domain activity logged under MITRE T1071.004.

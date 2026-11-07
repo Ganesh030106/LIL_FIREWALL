@@ -12,13 +12,6 @@ export default function SettingsTab({ currentUser }) {
     const [testingNotification, setTestingNotification] = useState(false);
     const [testResult, setTestResult] = useState(null);
 
-    // User management
-    const [users, setUsers] = useState([]);
-    const [newUsername, setNewUsername] = useState("");
-    const [newPassword, setNewPassword] = useState("");
-    const [newRole, setNewRole] = useState("analyst");
-    const [userActionMsg, setUserActionMsg] = useState("");
-
     // Audit logs
     const [auditLogs, setAuditLogs] = useState([]);
 
@@ -33,8 +26,8 @@ export default function SettingsTab({ currentUser }) {
     // Active sub-section
     const [activeSection, setActiveSection] = useState("detection");
 
-    const isAdmin = currentUser?.role === "admin";
-    const isAnalystOrAdmin = currentUser?.role === "admin" || currentUser?.role === "analyst";
+    const isAdmin = true;
+    const isAnalystOrAdmin = true;
 
     const fetchAllData = async () => {
         setLoading(true);
@@ -47,19 +40,11 @@ export default function SettingsTab({ currentUser }) {
             ]);
             if (sRes.ok) setSettings(await sRes.json());
             if (aRes.ok) {
-                const aData = await aRes.json();
-                setAuditLogs(aData.audit_logs || []);
+                const aData = await aRes.json().catch(() => ({}));
+                setAuditLogs(Array.isArray(aData.audit_logs) ? aData.audit_logs : []);
             }
             if (pRes.ok) setPcapStats(await pRes.json());
             if (dRes.ok) setDbStatus(await dRes.json());
-
-            if (isAdmin) {
-                const uRes = await apiFetch("/api/auth/users");
-                if (uRes.ok) {
-                    const uData = await uRes.json();
-                    setUsers(uData.users || []);
-                }
-            }
         } catch (err) {
             console.error("Error loading settings:", err);
         }
@@ -76,10 +61,6 @@ export default function SettingsTab({ currentUser }) {
 
     const handleSaveSettings = async (e) => {
         e.preventDefault();
-        if (!isAdmin) {
-            alert("Only operators with the 'admin' role can modify system settings.");
-            return;
-        }
         setSaving(true);
         setSaveStatus("");
         try {
@@ -123,30 +104,6 @@ export default function SettingsTab({ currentUser }) {
         setTestingNotification(false);
     };
 
-    const handleCreateUser = async (e) => {
-        e.preventDefault();
-        if (!isAdmin) return;
-        setUserActionMsg("");
-        try {
-            const res = await apiFetch("/api/auth/users", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username: newUsername.trim(), password: newPassword, role: newRole }),
-            });
-            if (res.ok) {
-                setUserActionMsg(`✓ Operator '${newUsername}' created successfully.`);
-                setNewUsername("");
-                setNewPassword("");
-                fetchAllData();
-            } else {
-                const data = await res.json().catch(() => ({}));
-                setUserActionMsg(`✗ ${data.detail || "Error creating user"}`);
-            }
-        } catch (err) {
-            setUserActionMsg(`✗ ${err.message}`);
-        }
-    };
-
     const handleDbMaintenance = async (action, mode = "TRUNCATE") => {
         setDbActionRunning(true);
         setDbActionMsg("");
@@ -168,22 +125,6 @@ export default function SettingsTab({ currentUser }) {
             setDbActionMsg(`✗ Error: ${e.message}`);
         }
         setDbActionRunning(false);
-    };
-
-    const handleRoleChange = async (username, newRoleVal) => {
-        if (!isAdmin) return;
-        try {
-            const res = await apiFetch(`/api/auth/users/${encodeURIComponent(username)}/role`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ role: newRoleVal }),
-            });
-            if (res.ok) {
-                fetchAllData();
-            }
-        } catch (err) {
-            console.error("Error updating role:", err);
-        }
     };
 
     const handleDownloadPcap = () => {
@@ -208,21 +149,16 @@ export default function SettingsTab({ currentUser }) {
                     <div className="tab-eyebrow">⚙️ Administration & Orchestration</div>
                     <h1>Firewall Settings & Controls</h1>
                     <p className="tab-subtitle">
-                        Tune AI detection thresholds, safe allowlists, multi-channel webhook notifications, and RBAC operator accounts.
+                        Tune AI detection thresholds, safe allowlists, multi-channel webhook notifications, and database configuration.
                     </p>
                 </div>
                 <div className="tab-header-actions">
-                    {!isAdmin && (
-                        <span className="chip chip-warning">Read-Only Mode ({currentUser?.role || "viewer"})</span>
-                    )}
                     <button className="btn btn-secondary" onClick={fetchAllData}>
                         ↻ Refresh
                     </button>
-                    {isAdmin && (
-                        <button className="btn btn-primary" onClick={handleSaveSettings} disabled={saving}>
-                            {saving ? "Saving..." : "💾 Save Changes"}
-                        </button>
-                    )}
+                    <button className="btn btn-primary" onClick={handleSaveSettings} disabled={saving}>
+                        {saving ? "Saving..." : "💾 Save Changes"}
+                    </button>
                 </div>
             </div>
 
@@ -240,7 +176,6 @@ export default function SettingsTab({ currentUser }) {
                     { id: "notifications", label: "📢 Alerts & Webhooks" },
                     { id: "copilot", label: "🤖 AI Copilot & Feeds" },
                     { id: "database", label: "💾 SQLite Database" },
-                    { id: "users", label: "👥 Operator Accounts" },
                     { id: "forensics", label: "🔬 PCAP & Audit Logs" },
                 ].map(sec => (
                     <button
@@ -914,118 +849,6 @@ export default function SettingsTab({ currentUser }) {
                     </div>
                 )}
             </form>
-
-            {/* ─── SECTION 5: Operator Accounts ─── */}
-            {activeSection === "users" && (
-                <div className="grid-2 animate-fade-up">
-                    <div className="panel">
-                        <div className="panel-header">
-                            <div>
-                                <h2>Registered Operator Accounts</h2>
-                                <p className="panel-header-sub">Role-Based Access Control (RBAC) users</p>
-                            </div>
-                            <span className="chip">{users.length} user{users.length !== 1 ? "s" : ""}</span>
-                        </div>
-                        <div className="table-wrap">
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Username</th>
-                                        <th>Role</th>
-                                        <th>Last Active</th>
-                                        {isAdmin && <th>Action</th>}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {users.map(u => (
-                                        <tr key={u.id}>
-                                            <td style={{ fontWeight: 600 }}>{u.username}</td>
-                                            <td>
-                                                {isAdmin ? (
-                                                    <select
-                                                        className="form-select"
-                                                        value={u.role}
-                                                        onChange={e => handleRoleChange(u.username, e.target.value)}
-                                                        style={{ padding: "2px 8px", fontSize: "12px" }}
-                                                    >
-                                                        <option value="admin">Admin 👑</option>
-                                                        <option value="analyst">Analyst 🛡️</option>
-                                                        <option value="viewer">Viewer 👁️</option>
-                                                    </select>
-                                                ) : (
-                                                    <span className="chip">{u.role}</span>
-                                                )}
-                                            </td>
-                                            <td className="table-mono">{u.last_login ? new Date(u.last_login).toLocaleTimeString() : "Never"}</td>
-                                            {isAdmin && (
-                                                <td>
-                                                    <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>
-                                                        {u.username === currentUser?.username ? "(You)" : "Active"}
-                                                    </span>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {isAdmin && (
-                        <div className="panel">
-                            <div className="panel-header">
-                                <div>
-                                    <h2>➕ Create Operator Account</h2>
-                                    <p className="panel-header-sub">Provision new access credentials</p>
-                                </div>
-                            </div>
-                            <form onSubmit={handleCreateUser} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                <div className="form-group">
-                                    <label className="form-label">Username</label>
-                                    <input
-                                        className="form-input"
-                                        value={newUsername}
-                                        onChange={e => setNewUsername(e.target.value)}
-                                        placeholder="e.g. jdoe_soc"
-                                        required
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Password</label>
-                                    <input
-                                        className="form-input"
-                                        type="password"
-                                        value={newPassword}
-                                        onChange={e => setNewPassword(e.target.value)}
-                                        placeholder="Min 6 characters"
-                                        required
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Role Assignment</label>
-                                    <select
-                                        className="form-select"
-                                        value={newRole}
-                                        onChange={e => setNewRole(e.target.value)}
-                                    >
-                                        <option value="admin">Admin (Full System Controls)</option>
-                                        <option value="analyst">Analyst (Triage & Rules)</option>
-                                        <option value="viewer">Viewer (Read-Only Telemetry)</option>
-                                    </select>
-                                </div>
-                                <button className="btn btn-primary" type="submit" style={{ marginTop: "6px" }}>
-                                    Create Account
-                                </button>
-                                {userActionMsg && (
-                                    <p style={{ fontSize: "12px", color: userActionMsg.startsWith("✓") ? "var(--color-safe)" : "var(--color-danger)" }}>
-                                        {userActionMsg}
-                                    </p>
-                                )}
-                            </form>
-                        </div>
-                    )}
-                </div>
-            )}
 
             {/* ─── SECTION 6: PCAP & Audit Logs ─── */}
             {activeSection === "forensics" && (

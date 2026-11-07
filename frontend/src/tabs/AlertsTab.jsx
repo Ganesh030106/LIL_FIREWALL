@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { apiFetch } from "../services/api";
 import { useRealtime } from "../hooks/useRealtime";
+import IncidentDrawer from "../components/IncidentDrawer";
 
 const SEVERITY_LEVELS = ["all", "critical", "high", "medium", "low"];
 const STATUS_OPTIONS = ["new", "acknowledged", "investigating", "resolved", "false_positive"];
@@ -9,12 +10,14 @@ export default function AlertsTab({ currentUser }) {
     const [alerts, setAlerts] = useState([]);
     const [filter, setFilter] = useState("all");
     const [statusFilter, setStatusFilter] = useState("all");
+    const [searchQuery, setSearchQuery] = useState("");
+    const [activeDrawerAlert, setActiveDrawerAlert] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState("");
     const [selectedIds, setSelectedIds] = useState(new Set());
     const logRef = useRef(null);
 
-    const isViewer = currentUser?.role === "viewer";
+    const isViewer = false;
 
     const fetchAlerts = async (signal) => {
         const res = await apiFetch("/api/alerts", { signal });
@@ -46,6 +49,8 @@ export default function AlertsTab({ currentUser }) {
             } else if (action === "status" && status_value) {
                 setAlerts(prev => prev.map(a => idSet.has(a.id) ? { ...a, status: status_value } : a));
             }
+        } else if (event.type === "reconnected") {
+            fetchAlerts().catch(() => {});
         }
     }, []));
 
@@ -165,7 +170,14 @@ export default function AlertsTab({ currentUser }) {
     const filtered = alerts.filter(a => {
         const matchesSev = filter === "all" || String(a.severity).toLowerCase() === filter;
         const matchesStatus = statusFilter === "all" || (a.status || "new") === statusFilter;
-        return matchesSev && matchesStatus;
+        const q = searchQuery.toLowerCase().trim();
+        const matchesQuery = !q ||
+            (a.message || "").toLowerCase().includes(q) ||
+            (a.category || "").toLowerCase().includes(q) ||
+            (a.source || "").toLowerCase().includes(q) ||
+            ((a.mitre || {}).technique_id || "").toLowerCase().includes(q) ||
+            ((a.meta || {}).source_ip || "").toLowerCase().includes(q);
+        return matchesSev && matchesStatus && matchesQuery;
     });
 
     const severityCounts = alerts.reduce((acc, a) => {
@@ -221,16 +233,37 @@ export default function AlertsTab({ currentUser }) {
 
             {/* Filters & Bulk Controls Bar */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", margin: "16px 0" }}>
-                <div className="filter-bar" style={{ margin: 0 }}>
-                    {SEVERITY_LEVELS.map(s => (
-                        <button
-                            key={s}
-                            className={`filter-pill${filter === s ? " active" : ""}`}
-                            onClick={() => setFilter(s)}
-                        >
-                            {s === "all" ? `All (${alerts.length})` : `${s.charAt(0).toUpperCase() + s.slice(1)} (${severityCounts[s] || 0})`}
-                        </button>
-                    ))}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                    <div className="filter-bar" style={{ margin: 0 }}>
+                        {SEVERITY_LEVELS.map(s => (
+                            <button
+                                key={s}
+                                className={`filter-pill${filter === s ? " active" : ""}`}
+                                onClick={() => setFilter(s)}
+                            >
+                                {s === "all" ? `All (${alerts.length})` : `${s.charAt(0).toUpperCase() + s.slice(1)} (${severityCounts[s] || 0})`}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div style={{ position: "relative", minWidth: "220px" }}>
+                        <input
+                            type="text"
+                            className="form-input"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search alerts, IPs, MITRE..."
+                            style={{ padding: "6px 26px 6px 10px", fontSize: "0.82rem", width: "100%" }}
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery("")}
+                                style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.8rem" }}
+                            >
+                                ✕
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -284,23 +317,30 @@ export default function AlertsTab({ currentUser }) {
                                 <th>Time</th>
                                 <th>Source</th>
                                 <th>Category</th>
+                                <th>MITRE ATT&CK</th>
                                 <th>Severity</th>
                                 <th>Status / Triage</th>
                                 <th>Port(s)</th>
                                 <th>Protocol</th>
                                 <th>Message</th>
+                                <th style={{ width: "95px", textAlign: "center" }}>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filtered.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} className="table-empty">
+                                    <td colSpan={11} className="table-empty">
                                         {alerts.length === 0 ? "No alerts recorded yet. The system is monitoring for anomalies." : "No alerts match the selected filter."}
                                     </td>
                                 </tr>
                             ) : (
                                 filtered.map(alert => (
-                                    <tr key={alert.id}>
+                                    <tr key={alert.id} style={{ cursor: "pointer" }} onClick={(e) => {
+                                        // Open drawer if click was not on checkbox or select
+                                        if (e.target.tagName !== "INPUT" && e.target.tagName !== "SELECT" && e.target.tagName !== "OPTION") {
+                                            setActiveDrawerAlert(alert);
+                                        }
+                                    }}>
                                         <td>
                                             <input
                                                 type="checkbox"
@@ -314,6 +354,11 @@ export default function AlertsTab({ currentUser }) {
                                         </td>
                                         <td>{alert.source}</td>
                                         <td>{alert.category}</td>
+                                        <td>
+                                            <span className="mitre-badge" title={alert.mitre?.technique_name || "Network Communication"}>
+                                                {alert.mitre?.technique_id || "T1071"}
+                                            </span>
+                                        </td>
                                         <td>
                                             <span className={`badge badge-${String(alert.severity).toLowerCase()}`}>
                                                 {alert.severity}
@@ -340,7 +385,21 @@ export default function AlertsTab({ currentUser }) {
                                         </td>
                                         <td className="table-mono">{renderPorts(alert.meta)}</td>
                                         <td>{alert.meta?.protocol ?? "—"}</td>
-                                        <td style={{ maxWidth: "300px" }}>{alert.message}</td>
+                                        <td style={{ maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={alert.message}>
+                                            {alert.message}
+                                        </td>
+                                        <td style={{ textAlign: "center" }}>
+                                            <button
+                                                className="btn"
+                                                style={{ padding: "4px 8px", fontSize: "0.74rem", background: "rgba(56, 189, 248, 0.12)", borderColor: "rgba(56, 189, 248, 0.4)", color: "#38bdf8" }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setActiveDrawerAlert(alert);
+                                                }}
+                                            >
+                                                🔍 Investigate
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))
                             )}
@@ -349,6 +408,16 @@ export default function AlertsTab({ currentUser }) {
                 </div>
                 {error && <p className="inline-error">{error}</p>}
             </div>
+
+            {/* Slide-out Incident Investigation Workspace Drawer */}
+            {activeDrawerAlert && (
+                <IncidentDrawer
+                    alert={activeDrawerAlert}
+                    onClose={() => setActiveDrawerAlert(null)}
+                    onAlertUpdated={fetchAlerts}
+                    currentUser={currentUser}
+                />
+            )}
         </div>
     );
 }

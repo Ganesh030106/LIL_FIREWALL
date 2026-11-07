@@ -10,6 +10,7 @@ export function useRealtime(onEvent) {
     useEffect(() => {
         let isMounted = true;
         let reconnectTimeout = null;
+        let hasConnectedBefore = false;
 
         function connect() {
             if (!isMounted) return;
@@ -19,7 +20,17 @@ export function useRealtime(onEvent) {
                 wsRef.current = ws;
 
                 ws.onopen = () => {
-                    if (isMounted) setConnected(true);
+                    if (isMounted) {
+                        setConnected(true);
+                        if (hasConnectedBefore && onEventRef.current) {
+                            try {
+                                onEventRef.current({ type: "reconnected" });
+                            } catch (err) {
+                                console.error("[WebSocket] reconnected event handler error:", err);
+                            }
+                        }
+                        hasConnectedBefore = true;
+                    }
                 };
 
                 ws.onmessage = (event) => {
@@ -46,7 +57,7 @@ export function useRealtime(onEvent) {
                         ws.close();
                     } catch {}
                 };
-            } catch (e) {
+            } catch {
                 if (isMounted) {
                     setConnected(false);
                     reconnectTimeout = setTimeout(connect, 4000);

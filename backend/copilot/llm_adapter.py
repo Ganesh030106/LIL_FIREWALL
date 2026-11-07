@@ -191,6 +191,128 @@ class GroundedCopilot:
 
     def _query_fallback(self, query: str) -> Dict[str, Any]:
         """Local deterministic response generation using SecurityCopilot intent regex."""
+        q_lower = query.lower()
+
+        # Advanced SOC Question Handlers
+        if "top" in q_lower and ("threat" in q_lower or "five" in q_lower or "alert" in q_lower):
+            raw_alerts = self.alerts.list() if self.alerts else []
+            top_alerts = sorted(raw_alerts, key=lambda a: (0 if a.get("severity") == "critical" else (1 if a.get("severity") == "high" else 2)))[:5]
+            if top_alerts:
+                lines = [f"{i+1}. [{a.get('severity', 'MED').upper()}] {a.get('category')}: {a.get('message')} (Source: {(a.get('meta') or {}).get('source_ip', 'Internal')})" for i, a in enumerate(top_alerts)]
+                return {
+                    "answer": f"Top Threat Activity Identified:\n" + "\n".join(lines) + "\n\nSuggested Action: Inspect incidents in the Incident Workspace and execute targeted containment playbooks.",
+                    "confidence": 0.96,
+                    "grounded": True,
+                    "provider": "local_threat_engine",
+                }
+            else:
+                return {
+                    "answer": "No active high-priority threats recorded. Perimeter status is nominal.",
+                    "confidence": 0.95,
+                    "grounded": True,
+                    "provider": "local_threat_engine",
+                }
+        elif "incident" in q_lower:
+            from security.correlation_engine import correlation_engine
+            incidents = correlation_engine.correlate_alerts(self.alerts.list() if self.alerts else [])
+            if incidents:
+                inc_summaries = [f"• {inc['incident_id'] if 'incident_id' in inc else 'INC-AUTO'}: {inc['title']} [{inc['severity'].upper()}] - Kill Chain Stage: {inc.get('kill_chain_stage', 'Initial Access')}" for inc in incidents[:4]]
+                return {
+                    "answer": f"Current Active Correlated Security Incidents ({len(incidents)} total):\n" + "\n".join(inc_summaries) + "\n\nAll incidents are tracked in the Incidents Tab with full kill-chain progression.",
+                    "confidence": 0.94,
+                    "grounded": True,
+                    "provider": "local_incident_engine",
+                }
+            else:
+                return {
+                    "answer": "No active incidents currently clustered. All incoming traffic is within nominal parameters.",
+                    "confidence": 0.92,
+                    "grounded": True,
+                    "provider": "local_incident_engine",
+                }
+        elif "predict" in q_lower or "forecast" in q_lower or "early warning" in q_lower:
+            from security.predictive_engine import predictive_engine
+            snap = self.metrics.snapshot() if self.metrics else {}
+            preds = predictive_engine.evaluate_predictions(telemetry=snap, recent_alerts=self.alerts.list() if self.alerts else [])
+            if preds:
+                pred_lines = [f"• [{p['severity'].upper()}] {p['threat_type']} (Confidence: {int(p['confidence']*100)}%, Horizon: {p['time_horizon']}): {p['recommended_preventative_action']}" for p in preds[:3]]
+                return {
+                    "answer": f"Predictive Early-Warning Forecast:\n" + "\n".join(pred_lines),
+                    "confidence": 0.93,
+                    "grounded": True,
+                    "provider": "local_predictive_engine",
+                }
+            else:
+                return {
+                    "answer": "No early-warning trajectory anomalies detected. Velocity derivatives are steady.",
+                    "confidence": 0.90,
+                    "grounded": True,
+                    "provider": "local_predictive_engine",
+                }
+        elif "why" in q_lower and "block" in q_lower:
+            active_blocks = self.response_engine.list_active_responses() if self.response_engine else []
+            if active_blocks:
+                b = active_blocks[0]
+                return {
+                    "answer": f"Host {b.target_ip} was contained for {int(b.duration)}s due to: '{b.reason}'. Enforced via autonomous kernel DROP rule with auto-unblock TTL.",
+                    "confidence": 0.95,
+                    "grounded": True,
+                    "provider": "local_response_engine",
+                }
+            else:
+                return {
+                    "answer": "No hosts are currently contained in the autonomous quarantine table.",
+                    "confidence": 0.92,
+                    "grounded": True,
+                    "provider": "local_response_engine",
+                }
+        elif "device" in q_lower and ("risk" in q_lower or "high" in q_lower):
+            return {
+                "answer": "Device Risk Analytics:\nDiscovered hosts are monitored for heuristic risk scoring based on abnormal port access, protocol diversity, and authentication failures. Inspect the Network Tab under 'Device Profiles' to view MAC/IP mappings.",
+                "confidence": 0.90,
+                "grounded": True,
+                "provider": "local_device_engine",
+            }
+        elif "mitre" in q_lower or "attack" in q_lower:
+            from security.mitre_mapper import mitre_mapper
+            summary = mitre_mapper.summarize_matrix(self.alerts.list() if self.alerts else [])
+            active_techs = [f"{t['id']} ({t['name']})" for t in summary['techniques'] if t['active']]
+            return {
+                "answer": f"MITRE ATT&CK Matrix Analysis:\n- Active Techniques ({summary['active_techniques']}): {', '.join(active_techs) if active_techs else 'None currently active.'}\n- Enterprise Coverage: {summary['coverage_percentage']}% of monitored tactics active.",
+                "confidence": 0.95,
+                "grounded": True,
+                "provider": "local_mitre_engine",
+            }
+        elif "posture" in q_lower or "grade" in q_lower:
+            from security.posture_engine import posture_engine
+            rules_cnt = len(self.rule_engine.list_rules()) if self.rule_engine else 0
+            crit_cnt = sum(1 for a in (self.alerts.list() if self.alerts else []) if a.get("severity") == "critical" and a.get("status") != "resolved")
+            p = posture_engine.calculate_posture(rules_count=rules_cnt, unhandled_critical_alerts=crit_cnt)
+            recs = " ".join(f"\n• {r}" for r in p["recommendations"])
+            return {
+                "answer": f"Security Posture Index: {p['score']}/100 (Grade {p['grade']} - {p['grade_label']}).\nKey Hardening Recommendations:{recs}",
+                "confidence": 0.92,
+                "grounded": True,
+                "provider": "local_posture_engine",
+            }
+        elif "recommend" in q_lower or "mitigat" in q_lower:
+            crit_alerts = [a for a in (self.alerts.list() if self.alerts else []) if a.get("severity") == "critical" and a.get("status") != "resolved"]
+            if crit_alerts:
+                src_ips = list(set((a.get("meta") or {}).get("source_ip", "Unknown") for a in crit_alerts[:3]))
+                return {
+                    "answer": f"Recommended SOC Mitigation Actions:\n1. Isolate hostile source IP(s): {', '.join(src_ips)} using 1-Click Autonomous Block.\n2. Review L7 DPI inspection logs for SQLi/XSS attack vectors.\n3. Verify that canary tripwire honeypots remain untouched.\n4. Deploy targeted DROP rules for exposed administrative ports.",
+                    "confidence": 0.90,
+                    "grounded": True,
+                    "provider": "local_recommendation_engine",
+                }
+            else:
+                return {
+                    "answer": "All critical alerts are triaged. Recommend continuing passive telemetry monitoring and keeping threat intelligence feeds updated.",
+                    "confidence": 0.90,
+                    "grounded": True,
+                    "provider": "local_recommendation_engine",
+                }
+
         intent: QueryIntent = self.fallback_copilot.parse_query(query)
         response_data: Dict[str, Any] = {"intent": intent.intent_type, "entity": intent.entity}
 

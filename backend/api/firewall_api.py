@@ -88,17 +88,46 @@ def create_firewall_routes(
     def create_rule(req: RuleCreateRequest, user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
         from core.rule_engine import RuleAction, RulePriority
 
+        # pyrefly: ignore[unnecessary-type-conversion]
+        action_str = str(req.action).lower().strip()
+        if action_str in ("block", "drop"):
+            rule_action = RuleAction.DROP
+        elif action_str in ("deny", "reject"):
+            rule_action = RuleAction.DENY
+        elif action_str == "allow":
+            rule_action = RuleAction.ALLOW
+        else:
+            try:
+                rule_action = RuleAction(action_str)
+            except Exception:
+                rule_action = RuleAction.DROP
+
+        try:
+            # pyrefly: ignore[unnecessary-type-conversion]
+            rule_priority = RulePriority(int(req.priority))
+        except Exception:
+            # pyrefly: ignore[unnecessary-type-conversion]
+            p_val = int(req.priority) if isinstance(req.priority, (int, float)) else 10
+            if p_val <= 3:
+                rule_priority = RulePriority.CRITICAL
+            elif p_val <= 7:
+                rule_priority = RulePriority.HIGH
+            elif p_val <= 15:
+                rule_priority = RulePriority.NORMAL
+            else:
+                rule_priority = RulePriority.LOW
+
         try:
             rule = rule_engine.add_rule(
                 name=req.name,
-                action=RuleAction(req.action),
+                action=rule_action,
                 src_ip=req.src_ip,
                 dst_ip=req.dst_ip,
                 src_port=req.src_port,
                 dst_port=req.dst_port,
                 protocol=req.protocol,
                 app_name=req.app_name,
-                priority=RulePriority(req.priority),
+                priority=rule_priority,
                 description=req.description,
             )
             if db:
@@ -143,6 +172,7 @@ def create_firewall_routes(
         raise HTTPException(status_code=404, detail="Rule not found")
 
     @router.get("/sessions")
+    @router.get("/network/sessions")
     def get_sessions():
         sessions = state_engine.list_tcp_sessions()
         result = [

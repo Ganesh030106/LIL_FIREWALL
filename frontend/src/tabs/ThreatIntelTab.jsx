@@ -3,10 +3,8 @@ import { apiFetch } from "../services/api";
 
 export default function ThreatIntelTab() {
     const [threatSummary, setThreatSummary] = useState(null);
-    const [insights, setInsights] = useState(null);
     const [riskDevices, setRiskDevices] = useState([]);
     const [riskUsers, setRiskUsers] = useState([]);
-    const [riskStats, setRiskStats] = useState(null);
     const [recentThreats, setRecentThreats] = useState([]);
     const [feedsData, setFeedsData] = useState(null);
     const [syncingFeeds, setSyncingFeeds] = useState(false);
@@ -17,6 +15,14 @@ export default function ThreatIntelTab() {
     const [lookupResult, setLookupResult] = useState(null);
     const [lookupLoading, setLookupLoading] = useState(false);
 
+    // DNS Threat & Shannon Entropy Inspector
+    const [dnsDomain, setDnsDomain] = useState("");
+    const [dnsResult, setDnsResult] = useState(null);
+    const [dnsLoading, setDnsLoading] = useState(false);
+
+    // Brute Force Defense Stats
+    const [bfStats, setBfStats] = useState(null);
+
     // Autonomous Block
     const [blockIp, setBlockIp] = useState("");
     const [blockDuration, setBlockDuration] = useState("3600");
@@ -26,22 +32,29 @@ export default function ThreatIntelTab() {
     const fetchAll = async () => {
         setLoading(true);
         try {
-            const [tRes, iRes, dRes, uRes, sRes, rRes, fRes] = await Promise.all([
+            const [tRes, dRes, uRes, rRes, fRes, bRes] = await Promise.all([
                 apiFetch("/api/threat-summary"),
-                apiFetch("/api/firewall-insights"),
                 apiFetch("/api/risk/devices"),
                 apiFetch("/api/risk/users"),
-                apiFetch("/api/risk/stats"),
                 apiFetch("/api/threats/recent"),
                 apiFetch("/api/threats/feeds"),
+                apiFetch("/api/security/brute-force/stats"),
             ]);
             if (tRes.ok) setThreatSummary(await tRes.json());
-            if (iRes.ok) setInsights(await iRes.json());
-            if (dRes.ok) setRiskDevices(await dRes.json());
-            if (uRes.ok) setRiskUsers(await uRes.json());
-            if (sRes.ok) setRiskStats(await sRes.json());
-            if (rRes.ok) setRecentThreats(await rRes.json());
+            if (dRes.ok) {
+                const dData = await dRes.json().catch(() => []);
+                setRiskDevices(Array.isArray(dData) ? dData : (Array.isArray(dData?.devices) ? dData.devices : []));
+            }
+            if (uRes.ok) {
+                const uData = await uRes.json().catch(() => []);
+                setRiskUsers(Array.isArray(uData) ? uData : (Array.isArray(uData?.users) ? uData.users : []));
+            }
+            if (rRes.ok) {
+                const rData = await rRes.json().catch(() => []);
+                setRecentThreats(Array.isArray(rData) ? rData : (Array.isArray(rData?.threats) ? rData.threats : []));
+            }
             if (fRes.ok) setFeedsData(await fRes.json());
+            if (bRes.ok) setBfStats(await bRes.json());
         } catch (err) {
             console.error("ThreatIntel fetch error:", err);
         }
@@ -105,6 +118,30 @@ export default function ThreatIntelTab() {
         } catch (err) {
             setBlockStatus(`✗ ${err.message}`);
         }
+    };
+
+    const handleDnsInspect = async (e, customDomain = null) => {
+        if (e && e.preventDefault) e.preventDefault();
+        const target = (customDomain !== null ? customDomain : dnsDomain).trim();
+        if (!target) return;
+        setDnsDomain(target);
+        setDnsLoading(true);
+        setDnsResult(null);
+        try {
+            const res = await apiFetch("/api/security/dns/inspect", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ domain: target, src_ip: "127.0.0.1" }),
+            });
+            if (res.ok) {
+                setDnsResult(await res.json());
+            } else {
+                setDnsResult({ error: "DNS inspection request failed." });
+            }
+        } catch (err) {
+            setDnsResult({ error: err.message });
+        }
+        setDnsLoading(false);
     };
 
     const threatLevelColor = (level) => {
@@ -304,6 +341,154 @@ export default function ThreatIntelTab() {
                         <button className="btn btn-danger" type="submit" style={{ marginTop: "auto" }}>Block IP</button>
                     </form>
                     {blockStatus && <p className={`mt-sm ${blockStatus.startsWith("✓") ? "text-safe" : "text-danger"}`} style={{ fontSize: "12px" }}>{blockStatus}</p>}
+                </div>
+            </div>
+
+            {/* ─── Shannon Entropy & Brute Force Defense Grid ─── */}
+            <div className="grid-2">
+                {/* ─── Shannon Entropy & DNS Tunneling Inspector ─── */}
+                <div className="panel animate-fade-up stagger-3">
+                    <div className="panel-header">
+                        <div>
+                            <h2>🧪 Shannon Entropy & DNS Tunneling Hunter</h2>
+                            <p className="panel-header-sub">Calculates Shannon entropy H(X) and detects DGA botnet domains</p>
+                        </div>
+                    </div>
+                    <form className="form-inline" onSubmit={handleDnsInspect} style={{ marginBottom: "10px" }}>
+                        <div className="form-group" style={{ flex: 1 }}>
+                            <input
+                                className="form-input"
+                                value={dnsDomain}
+                                onChange={e => setDnsDomain(e.target.value)}
+                                placeholder="e.g. c2VjcmV0ZGF0YQ.tunnel.evilcorp.com"
+                                required
+                            />
+                        </div>
+                        <button className="btn btn-primary" type="submit" disabled={dnsLoading}>
+                            {dnsLoading ? "Calculating..." : "Inspect Domain"}
+                        </button>
+                    </form>
+
+                    {/* Quick evaluation presets */}
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "12px", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Quick Test:</span>
+                        <button
+                            type="button"
+                            className="chip"
+                            style={{ cursor: "pointer", fontSize: "0.72rem" }}
+                            onClick={() => handleDnsInspect(null, "google.com")}
+                        >
+                            ✓ Clean: google.com
+                        </button>
+                        <button
+                            type="button"
+                            className="chip"
+                            style={{ cursor: "pointer", fontSize: "0.72rem", color: "#f59e0b" }}
+                            onClick={() => handleDnsInspect(null, "v8q9z3p2k1m5x7r.c2-pool.ru")}
+                        >
+                            ⚠️ DGA Pattern
+                        </button>
+                        <button
+                            type="button"
+                            className="chip"
+                            style={{ cursor: "pointer", fontSize: "0.72rem", color: "#ef4444" }}
+                            onClick={() => handleDnsInspect(null, "c2VjcmV0ZGF0YXRvYmVleGZpbHRyYXRlZDFmMjM0.tunnel.evilcorp.com")}
+                        >
+                            🔴 Exfiltration Tunnel
+                        </button>
+                    </div>
+
+                    {dnsResult && (
+                        <div style={{ background: "rgba(255, 255, 255, 0.03)", padding: "14px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                            {dnsResult.error ? (
+                                <p className="text-danger" style={{ margin: 0, fontSize: "0.85rem" }}>{dnsResult.error}</p>
+                            ) : (
+                                <>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                                        <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{dnsResult.analysis?.domain}</span>
+                                        <span className={`badge ${dnsResult.is_threat ? "badge-critical" : "badge-safe"}`}>
+                                            {dnsResult.is_threat ? `⚠️ THREAT: ${dnsResult.alert?.category || "MALICIOUS DNS"}` : "✓ BENIGN QUERY"}
+                                        </span>
+                                    </div>
+
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", marginBottom: "10px", textAlign: "center" }}>
+                                        <div style={{ background: "rgba(0,0,0,0.25)", padding: "8px", borderRadius: "6px" }}>
+                                            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Subdomain Entropy</div>
+                                            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: (dnsResult.analysis?.subdomain_entropy > 3.8 ? "#ef4444" : "#22c55e") }}>
+                                                {dnsResult.analysis?.subdomain_entropy ?? 0}
+                                            </div>
+                                            <div style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Threshold: 3.80</div>
+                                        </div>
+                                        <div style={{ background: "rgba(0,0,0,0.25)", padding: "8px", borderRadius: "6px" }}>
+                                            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Base Domain Entropy</div>
+                                            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: (dnsResult.analysis?.base_entropy > 3.5 ? "#f59e0b" : "#22c55e") }}>
+                                                {dnsResult.analysis?.base_entropy ?? 0}
+                                            </div>
+                                            <div style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Threshold: 3.50</div>
+                                        </div>
+                                        <div style={{ background: "rgba(0,0,0,0.25)", padding: "8px", borderRadius: "6px" }}>
+                                            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Vowel Ratio</div>
+                                            <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>
+                                                {((dnsResult.analysis?.vowel_ratio ?? 0) * 100).toFixed(1)}%
+                                            </div>
+                                            <div style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Consonants: {dnsResult.analysis?.consecutive_consonants ?? 0} max</div>
+                                        </div>
+                                    </div>
+
+                                    {dnsResult.alert && (
+                                        <div style={{ fontSize: "0.78rem", background: "rgba(239, 68, 68, 0.12)", border: "1px solid rgba(239, 68, 68, 0.3)", padding: "8px 10px", borderRadius: "6px", color: "#fca5a5" }}>
+                                            <strong>Detection Signal:</strong> {dnsResult.alert.message}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* ─── Brute-Force & Credential Stuffing Defenses ─── */}
+                <div className="panel animate-fade-up stagger-3">
+                    <div className="panel-header">
+                        <div>
+                            <h2>🛡️ Credential Stuffing & Auth Defenses</h2>
+                            <p className="panel-header-sub">Monitors repeated connection bursts across SSH, RDP, and FTP</p>
+                        </div>
+                        <span className="chip chip-live">Active Sensor</span>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", marginBottom: "14px", textAlign: "center" }}>
+                        <div style={{ background: "rgba(0,0,0,0.25)", padding: "10px", borderRadius: "6px" }}>
+                            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Monitored Ports</div>
+                            <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--accent)" }}>
+                                {bfStats?.monitored_ports?.join(", ") || "22, 3389, 21"}
+                            </div>
+                            <div style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>SSH, RDP, FTP</div>
+                        </div>
+                        <div style={{ background: "rgba(0,0,0,0.25)", padding: "10px", borderRadius: "6px" }}>
+                            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Max Threshold</div>
+                            <div style={{ fontSize: "1rem", fontWeight: 700 }}>
+                                {bfStats?.threshold_attempts || 15} fails
+                            </div>
+                            <div style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>in {bfStats?.window_seconds || 60}s window</div>
+                        </div>
+                        <div style={{ background: "rgba(0,0,0,0.25)", padding: "10px", borderRadius: "6px" }}>
+                            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Active Suspects</div>
+                            <div style={{ fontSize: "1rem", fontWeight: 700, color: (bfStats?.total_suspects > 0 ? "#ef4444" : "#22c55e") }}>
+                                {bfStats?.total_suspects || 0}
+                            </div>
+                            <div style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Under quarantine</div>
+                        </div>
+                    </div>
+
+                    <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", background: "rgba(255,255,255,0.02)", padding: "10px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                            <span style={{ fontWeight: 600 }}>Autonomous Containment:</span>
+                            <span className="badge badge-safe">ENFORCED</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: "0.75rem", lineHeight: 1.4 }}>
+                            Any host exceeding {bfStats?.threshold_attempts || 15} failed handshakes within {bfStats?.window_seconds || 60} seconds is automatically pushed to the autonomous quarantine queue with a 1-hour containment TTL and logged under MITRE technique <code>T1110 (Brute Force)</code>.
+                        </p>
+                    </div>
                 </div>
             </div>
 

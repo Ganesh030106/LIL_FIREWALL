@@ -1,0 +1,14 @@
+name: ransomware-containment-response
+description: Emergency isolation and forensic capture upon detection of canary file entropy tampering
+match:
+  category: Ransomware File Encryption
+  min_severity: critical
+actions:
+  - type: block_ip
+    duration_seconds: 7200
+  - type: attach_pcap
+    packets: 500
+  - type: notify
+    channels: [slack, telegram, email]
+  - type: create_alert_note
+    note: Critical ransomware canary sentinel tripwire engaged; host quarantined under MITRE T1486.

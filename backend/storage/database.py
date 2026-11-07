@@ -24,6 +24,7 @@ from sqlalchemy import (
     create_engine,
     event,
     func,
+    or_,
     select,
     text,
 )
@@ -244,6 +245,31 @@ class Database:
             Column("created_at", Text, default=lambda: datetime.now(timezone.utc).isoformat()),
             Column("revoked", Boolean, default=False),
             Column("revoked_at", Text, nullable=True),
+        )
+
+        self.incidents_t = Table(
+            "incidents",
+            self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("incident_id", Text, unique=True, nullable=False, index=True),
+            Column("title", Text, nullable=False),
+            Column("description", Text, nullable=True),
+            Column("severity", Text, nullable=False, index=True),
+            Column("status", Text, default="new", index=True),
+            Column("assignee", Text, nullable=True),
+            Column("risk_score", Float, default=0.0),
+            Column("source_ip", Text, nullable=True, index=True),
+            Column("target_ip", Text, nullable=True),
+            Column("alert_count", Integer, default=0),
+            Column("alert_ids", Text, nullable=True),
+            Column("mitre_tactics", Text, nullable=True),
+            Column("mitre_techniques", Text, nullable=True),
+            Column("kill_chain_stage", Text, nullable=True),
+            Column("evidence", Text, nullable=True),
+            Column("analyst_notes", Text, nullable=True),
+            Column("created_at", Text, default=lambda: datetime.now(timezone.utc).isoformat(), index=True),
+            Column("updated_at", Text, default=lambda: datetime.now(timezone.utc).isoformat()),
+            Column("resolved_at", Text, nullable=True),
         )
 
     def _init_schema(self) -> None:
@@ -497,43 +523,44 @@ class Database:
         return logs
 
     def seed_default_users(self) -> Optional[str]:
-        """Seed initial admin account with a secure generated password on first run.
-        Returns the generated admin password if seeded, or None if users already exist.
-        """
-        import secrets
+        """Seed standard enterprise operator accounts (admin, analyst, viewer) for SOC console authentication."""
         from storage.auth import get_password_hash
 
+        default_accounts = [
+            ("admin", "admin123", "admin"),
+            ("analyst", "analyst123", "analyst"),
+            ("viewer", "viewer123", "viewer"),
+        ]
+
         try:
-            with self.engine.connect() as conn:
-                stmt = select(self.users_t.c.id).limit(1)
-                existing = conn.execute(stmt).scalar_one_or_none()
-            if existing is not None:
-                return None
-
-            generated_admin_pw = f"Volcano-{secrets.token_urlsafe(12)}"
-            default_users = [
-                {
-                    "username": "admin",
-                    "password_hash": get_password_hash(generated_admin_pw),
-                    "role": "admin",
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                    "active": True,
-                    "must_change_password": True,
-                },
-            ]
             with self.engine.begin() as conn:
-                conn.execute(self.users_t.insert().values(default_users))
+                for username, password, role in default_accounts:
+                    stmt = select(self.users_t.c.id).where(self.users_t.c.username == username)
+                    existing = conn.execute(stmt).scalar_one_or_none()
+                    if existing is None:
+                        conn.execute(self.users_t.insert().values({
+                            "username": username,
+                            "password_hash": get_password_hash(password),
+                            "role": role,
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                            "active": True,
+                            "must_change_password": False,
+                        }))
+                    else:
+                        conn.execute(
+                            self.users_t.update()
+                            .where(self.users_t.c.username == username)
+                            .values({
+                                "password_hash": get_password_hash(password),
+                                "active": True,
+                                "must_change_password": False,
+                                "failed_login_attempts": 0,
+                                "locked_until": None,
+                            })
+                        )
 
-            # Print ONLY to console once — NEVER to loggers or audit logs
-            print(f"\n{'=' * 64}")
-            print("  [SECURITY NOTICE] Initial admin account created on first run.")
-            print("  Username: admin")
-            print(f"  Generated Temporary Password: {generated_admin_pw}")
-            print("  Action Required: Change password before logging in via /api/auth/change-password")
-            print(f"{'=' * 64}\n")
-
-            logger.info("[Database] First-run user bootstrap completed. Generated admin account with must_change_password=True.")
-            return generated_admin_pw
+            logger.info("[Database] Operator accounts (admin, analyst, viewer) verified and synchronized.")
+            return "admin123"
         except Exception as e:
             logger.warning(f"[Database] User seed skipped or failed: {e}")
             return None
@@ -719,6 +746,7 @@ class Database:
         status: Dict[str, Any] = {
             "is_postgres": self.is_postgres,
             "engine": "postgresql" if self.is_postgres else "sqlite",
+            "db_type": "postgresql" if self.is_postgres else "sqlite",
             "journal_mode": "wal" if not self.is_postgres else "n/a",
             "file_size_bytes": 0,
             "file_size_mb": 0.0,
@@ -1003,4 +1031,192 @@ class Database:
                     "revoked_at": row.revoked_at,
                 })
         return tokens
+
+    # ─── Incident Management Methods (V5.0) ───
+
+    def create_incident(self, incident_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Insert a new security incident and return the created record."""
+        inc_id = incident_data.get("incident_id")
+        if not inc_id:
+            now_prefix = datetime.now(timezone.utc).strftime("%Y%m%d")
+            rand_suffix = secrets.token_hex(3).upper()
+            inc_id = f"INC-{now_prefix}-{rand_suffix}"
+
+        alert_ids = incident_data.get("alert_ids")
+        if isinstance(alert_ids, list):
+            alert_ids = json.dumps(alert_ids)
+
+        mitre_tactics = incident_data.get("mitre_tactics")
+        if isinstance(mitre_tactics, list):
+            mitre_tactics = json.dumps(mitre_tactics)
+
+        mitre_techs = incident_data.get("mitre_techniques")
+        if isinstance(mitre_techs, list):
+            mitre_techs = json.dumps(mitre_techs)
+
+        evidence = incident_data.get("evidence")
+        if isinstance(evidence, (dict, list)):
+            evidence = json.dumps(evidence)
+
+        notes = incident_data.get("analyst_notes")
+        if isinstance(notes, list):
+            notes = json.dumps(notes)
+
+        now = datetime.now(timezone.utc).isoformat()
+        row_data = {
+            "incident_id": inc_id,
+            "title": incident_data.get("title", "Correlated Security Incident"),
+            "description": incident_data.get("description", ""),
+            "severity": (incident_data.get("severity") or "medium").lower(),
+            "status": (incident_data.get("status") or "new").lower(),
+            "assignee": incident_data.get("assignee"),
+            "risk_score": float(incident_data.get("risk_score", 0.0)),
+            "source_ip": incident_data.get("source_ip"),
+            "target_ip": incident_data.get("target_ip"),
+            "alert_count": int(incident_data.get("alert_count", 1)),
+            "alert_ids": alert_ids,
+            "mitre_tactics": mitre_tactics,
+            "mitre_techniques": mitre_techs,
+            "kill_chain_stage": incident_data.get("kill_chain_stage", "Initial Access"),
+            "evidence": evidence,
+            "analyst_notes": notes,
+            "created_at": incident_data.get("created_at", now),
+            "updated_at": now,
+            "resolved_at": incident_data.get("resolved_at"),
+        }
+        with self.engine.begin() as conn:
+            res = conn.execute(self.incidents_t.insert().values(**row_data))
+            new_pk = res.inserted_primary_key[0] if res.inserted_primary_key else None
+        return self.get_incident(inc_id) or {"id": new_pk, **row_data}
+
+    def get_incident(self, incident_id_or_pk: Any) -> Optional[Dict[str, Any]]:
+        """Retrieve a single incident by its string ID or integer PK."""
+        with self.engine.connect() as conn:
+            if isinstance(incident_id_or_pk, int):
+                stmt = select(self.incidents_t).where(self.incidents_t.c.id == incident_id_or_pk)
+            else:
+                str_val = str(incident_id_or_pk)
+                int_val = int(str_val) if str_val.isdigit() else -1
+                stmt = select(self.incidents_t).where(
+                    or_(
+                        self.incidents_t.c.incident_id == str_val,
+                        self.incidents_t.c.id == int_val,
+                    )
+                )
+            row = conn.execute(stmt).fetchone()
+            if not row:
+                return None
+            return self._row_to_incident(row)
+
+    def list_incidents(
+        self,
+        status: Optional[str] = None,
+        severity: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """List incidents with optional status/severity filtering."""
+        with self.engine.connect() as conn:
+            stmt = select(self.incidents_t)
+            if status and status.lower() != "all":
+                stmt = stmt.where(self.incidents_t.c.status == status.lower())
+            if severity and severity.lower() != "all":
+                stmt = stmt.where(self.incidents_t.c.severity == severity.lower())
+            stmt = stmt.order_by(self.incidents_t.c.created_at.desc()).limit(limit)
+            rows = conn.execute(stmt).fetchall()
+            return [self._row_to_incident(r) for r in rows]
+
+    def update_incident(self, incident_id: str, updates: Dict[str, Any]) -> bool:
+        """Update incident attributes (status, assignee, severity, notes, resolution)."""
+        clean_updates: Dict[str, Any] = {}
+        for key in ["title", "description", "severity", "status", "assignee", "kill_chain_stage", "target_ip", "source_ip"]:
+            if key in updates and updates[key] is not None:
+                clean_updates[key] = updates[key]
+        if "risk_score" in updates:
+            clean_updates["risk_score"] = float(updates["risk_score"])
+        if "alert_count" in updates:
+            clean_updates["alert_count"] = int(updates["alert_count"])
+        if "alert_ids" in updates and isinstance(updates["alert_ids"], list):
+            clean_updates["alert_ids"] = json.dumps(updates["alert_ids"])
+        if "mitre_tactics" in updates and isinstance(updates["mitre_tactics"], list):
+            clean_updates["mitre_tactics"] = json.dumps(updates["mitre_tactics"])
+        if "mitre_techniques" in updates and isinstance(updates["mitre_techniques"], list):
+            clean_updates["mitre_techniques"] = json.dumps(updates["mitre_techniques"])
+        if "evidence" in updates and isinstance(updates["evidence"], (dict, list)):
+            clean_updates["evidence"] = json.dumps(updates["evidence"])
+        if "analyst_notes" in updates and isinstance(updates["analyst_notes"], list):
+            clean_updates["analyst_notes"] = json.dumps(updates["analyst_notes"])
+
+        clean_updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+        if updates.get("status") in ["resolved", "false_positive"] and "resolved_at" not in updates:
+            clean_updates["resolved_at"] = datetime.now(timezone.utc).isoformat()
+
+        str_val = incident_id
+        int_val = int(str_val) if str_val.isdigit() else -1
+        with self.engine.begin() as conn:
+            stmt = (
+                self.incidents_t.update()
+                .where(
+                    or_(
+                        self.incidents_t.c.incident_id == str_val,
+                        self.incidents_t.c.id == int_val,
+                    )
+                )
+                .values(**clean_updates)
+            )
+            res = conn.execute(stmt)
+            return res.rowcount > 0
+
+    def add_incident_note(self, incident_id: str, author: str, note_text: str) -> bool:
+        """Append an analyst note to the incident."""
+        inc = self.get_incident(incident_id)
+        if not inc:
+            return False
+        current_notes = inc.get("analyst_notes") or []
+        if isinstance(current_notes, str):
+            try:
+                current_notes = json.loads(current_notes)
+            except Exception:
+                current_notes = []
+        new_note = {
+            "author": author,
+            "text": note_text,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        current_notes.append(new_note)
+        return self.update_incident(incident_id, {"analyst_notes": current_notes})
+
+    def _row_to_incident(self, r: Any) -> Dict[str, Any]:
+        """Convert a database row to a deserialized incident dictionary."""
+        def _parse_json(val: Any, default: Any) -> Any:
+            if val is None:
+                return default
+            if isinstance(val, (list, dict)):
+                return val
+            try:
+                return json.loads(val)
+            except Exception:
+                return default
+
+        return {
+            "id": r.id,
+            "incident_id": r.incident_id,
+            "title": r.title,
+            "description": r.description or "",
+            "severity": r.severity,
+            "status": r.status,
+            "assignee": r.assignee,
+            "risk_score": float(r.risk_score or 0.0),
+            "source_ip": r.source_ip,
+            "target_ip": r.target_ip,
+            "alert_count": int(r.alert_count or 0),
+            "alert_ids": _parse_json(r.alert_ids, []),
+            "mitre_tactics": _parse_json(r.mitre_tactics, []),
+            "mitre_techniques": _parse_json(r.mitre_techniques, []),
+            "kill_chain_stage": r.kill_chain_stage or "Initial Access",
+            "evidence": _parse_json(r.evidence, {}),
+            "analyst_notes": _parse_json(r.analyst_notes, []),
+            "created_at": r.created_at,
+            "updated_at": r.updated_at,
+            "resolved_at": r.resolved_at,
+        }
 

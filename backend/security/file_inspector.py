@@ -12,7 +12,7 @@ import re
 import threading
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 SUSPICIOUS_EXTENSIONS = {
     ".exe", ".scr", ".pif", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh",
@@ -88,6 +88,11 @@ class FileInspector:
         is_pe = content.startswith(b"MZ")
         is_elf = content.startswith(b"\x7fELF")
         is_archive = content.startswith((b"PK\x03\x04", b"Rar!", b"7z\xbc\xaf\x27\x1c"))
+
+        if is_archive and ext in {".pdf", ".docx", ".xlsx", ".jpg", ".png", ".txt"}:
+            signals.append("Archive container disguised under non-archive file extension")
+            threat_types.append("Masquerading Archive")
+            risk_score += 0.35
 
         if is_pe:
             signals.append("Windows Portable Executable (PE / MZ) binary signature detected")

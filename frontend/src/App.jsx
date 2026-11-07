@@ -1,30 +1,32 @@
 import { useEffect, useState } from "react";
 import OverviewTab from "./Dashboard";
+import IncidentsTab from "./tabs/IncidentsTab";
 import AlertsTab from "./tabs/AlertsTab";
 import RulesTab from "./tabs/RulesTab";
 import NetworkTab from "./tabs/NetworkTab";
 import ThreatIntelTab from "./tabs/ThreatIntelTab";
 import ToolsTab from "./tabs/ToolsTab";
 import HistoryTab from "./tabs/HistoryTab";
-import LoginModal from "./components/LoginModal";
 import SettingsTab from "./tabs/SettingsTab";
-import { getUser, clearAuth } from "./services/api";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { useRealtime } from "./hooks/useRealtime";
 
 const TABS = [
-    { id: "overview",    icon: "📊", label: "Overview" },
-    { id: "alerts",      icon: "🔔", label: "Live Alerts" },
-    { id: "rules",       icon: "🛡️", label: "Firewall Rules" },
-    { id: "network",     icon: "🌐", label: "Network" },
+    { id: "overview",     icon: "📊", label: "Overview" },
+    { id: "incidents",    icon: "🚨", label: "Incidents" },
+    { id: "alerts",       icon: "🔔", label: "Live Alerts" },
+    { id: "rules",        icon: "🛡️", label: "Firewall Rules" },
+    { id: "network",      icon: "🌐", label: "Network" },
     { id: "threat-intel", icon: "🧠", label: "AI Threat Intel" },
-    { id: "tools",       icon: "🔧", label: "Security Tools" },
-    { id: "history",     icon: "📜", label: "History" },
-    { id: "settings",    icon: "⚙️", label: "Settings" },
+    { id: "tools",        icon: "🔧", label: "Security Tools" },
+    { id: "history",      icon: "📜", label: "History" },
+    { id: "settings",     icon: "⚙️", label: "Settings" },
 ];
 
 function renderTab(activeTab, currentUser) {
     switch (activeTab) {
         case "overview":     return <OverviewTab currentUser={currentUser} />;
+        case "incidents":    return <IncidentsTab currentUser={currentUser} />;
         case "alerts":       return <AlertsTab currentUser={currentUser} />;
         case "rules":        return <RulesTab currentUser={currentUser} />;
         case "network":      return <NetworkTab currentUser={currentUser} />;
@@ -39,8 +41,7 @@ function renderTab(activeTab, currentUser) {
 export default function App() {
     const [activeTab, setActiveTab] = useState("overview");
     const [theme, setTheme] = useState("dark");
-    const [currentUser, setCurrentUser] = useState(() => getUser());
-    const [isLoginOpen, setIsLoginOpen] = useState(false);
+    const currentUser = { username: "operator", role: "admin" };
 
     // Global WebSocket real-time connection monitor
     const { connected: wsConnected } = useRealtime();
@@ -51,28 +52,11 @@ export default function App() {
         root.style.colorScheme = theme === "dark" ? "dark" : "light";
     }, [theme]);
 
-    const handleUserClick = () => {
-        if (currentUser) {
-            if (window.confirm(`Logged in as ${currentUser.username} (${currentUser.role}). Do you want to sign out?`)) {
-                clearAuth();
-                setCurrentUser(null);
-            }
-        } else {
-            setIsLoginOpen(true);
-        }
-    };
-
-    const getRoleIcon = (role) => {
-        if (role === "admin") return "👑";
-        if (role === "analyst") return "🛡️";
-        return "👁️";
-    };
-
     return (
         <div className="app-layout">
             {/* ── Sidebar ── */}
             <aside className="sidebar">
-                <div className="sidebar-brand" title="AI-Powered Contextual Firewall for Traffic Anomaly Detection">CF</div>
+                <div className="sidebar-brand" title="Volcano AI Firewall V5.0 — Autonomous SOC Platform">🌋</div>
 
                 <nav className="sidebar-nav">
                     {TABS.map(tab => (
@@ -87,21 +71,6 @@ export default function App() {
                         </button>
                     ))}
                 </nav>
-
-                {/* Operator Profile Button */}
-                <button
-                    type="button"
-                    className={`sidebar-user-btn${currentUser ? " logged-in" : ""}`}
-                    onClick={handleUserClick}
-                    data-tooltip={
-                        currentUser
-                            ? `${currentUser.username} [${currentUser.role}] (Click to sign out)`
-                            : "Operator Sign In"
-                    }
-                    aria-label="User Account"
-                >
-                    {currentUser ? getRoleIcon(currentUser.role) : "🔑"}
-                </button>
 
                 {/* Theme Toggle */}
                 <button
@@ -127,15 +96,10 @@ export default function App() {
 
             {/* ── Main Content ── */}
             <main className="main-content" key={activeTab}>
-                {renderTab(activeTab, currentUser)}
+                <ErrorBoundary resetKey={activeTab}>
+                    {renderTab(activeTab, currentUser)}
+                </ErrorBoundary>
             </main>
-
-            {/* ── Operator Login Modal ── */}
-            <LoginModal
-                isOpen={isLoginOpen}
-                onClose={() => setIsLoginOpen(false)}
-                onLoginSuccess={(user) => setCurrentUser(user)}
-            />
         </div>
     );
 }

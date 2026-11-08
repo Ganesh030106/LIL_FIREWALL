@@ -62,7 +62,7 @@
   "llm_api_key": "",
   "llm_api_base": "https://api.openai.com/v1",
   "llm_model": "gpt-4o-mini",
-  "jwt_secret_key": "volcano-firewall-secure-jwt-secret-key-v5",
+  "jwt_secret_key": "e8b9f4a13d7c52e69041a87c12f059bc43a290d18e7c654b12a3d4e5f6a7b8c8",
   "jwt_algorithm": "HS256",
   "jwt_access_token_expire_minutes": 120,
   "watch_directory": "./sandbox",

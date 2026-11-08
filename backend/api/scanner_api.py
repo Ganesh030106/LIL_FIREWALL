@@ -16,6 +16,13 @@ router = APIRouter(prefix="/api/scanner", tags=["Scanner & Vulnerabilities"])
 
 # In-memory scan history buffer (last 50 scans)
 _scan_history: List[Dict[str, Any]] = []
+_db: Any = None
+
+
+def set_scanner_db(db: Any) -> None:
+    """Attach persistent database to scanner API router."""
+    global _db
+    _db = db
 
 
 class PortScanRequest(BaseModel):
@@ -51,16 +58,23 @@ def run_port_scan(req: PortScanRequest) -> Dict[str, Any]:
             grab_banner=req.grab_banner,
         )
         # Record in history
-        _scan_history.insert(0, {
+        scan_rec = {
             "type": "port_scan",
             "target": result["target"],
             "resolved_ip": result["resolved_ip"],
             "profile": result["profile"],
             "open_ports_count": result["open_ports_count"],
+            "open_ports": result.get("open_ports", []),
             "timestamp": result["timestamp"],
-        })
+        }
+        _scan_history.insert(0, scan_rec)
         if len(_scan_history) > 50:
             _scan_history.pop()
+        if _db:
+            try:
+                _db.save_vuln_scan(scan_rec)
+            except Exception:
+                pass
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -81,19 +95,27 @@ def run_vuln_scan(req: VulnScanRequest) -> Dict[str, Any]:
         )
         assessment = result.get("vulnerability_assessment", {})
         # Record in history
-        _scan_history.insert(0, {
+        scan_rec = {
             "type": "vuln_scan",
             "target": result["target"],
             "resolved_ip": result["resolved_ip"],
             "profile": result["profile"],
             "open_ports_count": result["open_ports_count"],
+            "open_ports": result.get("open_ports", []),
             "overall_risk": assessment.get("overall_risk", "UNKNOWN"),
             "composite_risk_score": assessment.get("composite_risk_score", 0.0),
             "total_vulnerabilities": assessment.get("total_vulnerabilities", 0),
+            "vulnerabilities": assessment.get("vulnerabilities", []),
             "timestamp": result["timestamp"],
-        })
+        }
+        _scan_history.insert(0, scan_rec)
         if len(_scan_history) > 50:
             _scan_history.pop()
+        if _db:
+            try:
+                _db.save_vuln_scan(scan_rec)
+            except Exception:
+                pass
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -121,5 +143,12 @@ def get_vulnerability_signatures() -> Dict[str, Any]:
 
 @router.get("/history")
 def get_scanner_history() -> List[Dict[str, Any]]:
-    """Retrieve the recent scan history."""
+    """Retrieve the recent scan history from database or cache."""
+    if _db:
+        try:
+            persisted = _db.list_vuln_scans(limit=50)
+            if persisted:
+                return persisted
+        except Exception:
+            pass
     return _scan_history

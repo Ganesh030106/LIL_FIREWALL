@@ -267,7 +267,7 @@ export default function OverviewTab() {
         const map = {};
         alertsList.forEach(a => {
             const meta = a.meta || {};
-            const src = meta.source_ip || meta.src_ip || (a.message?.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/) || [])[0] || "192.168.1.105";
+            const src = meta.source_ip || meta.src_ip || (a.message?.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/) || [])[0] || a.source || "127.0.0.1";
             if (!map[src]) map[src] = { ip: src, count: 0, maxSev: a.severity || "medium", lastSeen: a.created_at };
             map[src].count++;
             if (a.severity === "critical") map[src].maxSev = "critical";
@@ -580,42 +580,49 @@ export default function OverviewTab() {
                     </div>
                 ) : (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "14px", marginTop: "14px" }}>
-                        {predictiveSignals.map((sig, idx) => (
-                            <div key={idx} style={{
-                                padding: "14px 16px",
-                                borderRadius: "8px",
-                                background: "rgba(239, 68, 68, 0.06)",
-                                border: "1px solid rgba(239, 68, 68, 0.3)",
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "8px"
-                            }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--accent)", fontSize: "13px" }}>
-                                        {sig.target_ip || "Internal Target"}
-                                    </span>
-                                    <span className="badge badge-critical" style={{ fontSize: "10px" }}>
-                                        Horizon: {sig.time_horizon || "180s"}
-                                    </span>
-                                </div>
+                        {predictiveSignals.map((sig, idx) => {
+                            const targetLabel = sig.affected_target || sig.target_ip || "Internal Target";
+                            const riskNum = Math.round((Number(sig.predicted_risk ?? sig.risk_score ?? 0.75)) * 100);
+                            const accel = sig.velocity_derivative ? Number(sig.velocity_derivative).toFixed(2) : (Array.isArray(sig.evidence) ? sig.evidence[0] : "+12.4");
+                            const mitigation = sig.proactive_mitigation || sig.recommended_preventative_action || "Deploy rate-limit threshold & trigger SYN cookie defense";
 
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                                    <span style={{ color: "var(--text-muted)" }}>Forecasted Escalation Risk:</span>
-                                    <strong style={{ color: "var(--critical)" }}>{Math.round((sig.predicted_risk || 0.8) * 100)} / 100</strong>
-                                </div>
+                            return (
+                                <div key={idx} style={{
+                                    padding: "14px 16px",
+                                    borderRadius: "8px",
+                                    background: "rgba(239, 68, 68, 0.06)",
+                                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "8px"
+                                }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--accent)", fontSize: "13px" }}>
+                                            {targetLabel}
+                                        </span>
+                                        <span className="badge badge-critical" style={{ fontSize: "10px" }}>
+                                            Horizon: {sig.time_horizon || "180s"}
+                                        </span>
+                                    </div>
 
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                                    <span style={{ color: "var(--text-muted)" }}>Velocity Derivative:</span>
-                                    <span style={{ fontFamily: "var(--font-mono)", color: "var(--warning)" }}>
-                                        d(pps)/dt: {sig.velocity_derivative ? Number(sig.velocity_derivative).toFixed(2) : "+12.4"} pps/s
-                                    </span>
-                                </div>
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                                        <span style={{ color: "var(--text-muted)" }}>Forecasted Escalation Risk:</span>
+                                        <strong style={{ color: "var(--critical)" }}>{riskNum} / 100</strong>
+                                    </div>
 
-                                <div style={{ fontSize: "12px", color: "var(--text-secondary)", background: "rgba(0,0,0,0.25)", padding: "8px 10px", borderRadius: "4px", marginTop: "4px" }}>
-                                    🛡️ <strong>Proactive Mitigation:</strong> {sig.proactive_mitigation || "Deploy rate-limit threshold & trigger SYN cookie defense"}
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                                        <span style={{ color: "var(--text-muted)" }}>Velocity Derivative:</span>
+                                        <span style={{ fontFamily: "var(--font-mono)", color: "var(--warning)" }}>
+                                            {accel.includes("pps") ? accel : `d(pps)/dt: ${accel} pps/s`}
+                                        </span>
+                                    </div>
+
+                                    <div style={{ fontSize: "12px", color: "var(--text-secondary)", background: "rgba(0,0,0,0.25)", padding: "8px 10px", borderRadius: "4px", marginTop: "4px" }}>
+                                        🛡️ <strong>Proactive Mitigation:</strong> {mitigation}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

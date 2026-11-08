@@ -272,6 +272,50 @@ class Database:
             Column("resolved_at", Text, nullable=True),
         )
 
+        self.vuln_scans_t = Table(
+            "vuln_scans",
+            self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("scan_id", Text, unique=True, nullable=False, index=True),
+            Column("timestamp", Text, nullable=False, index=True),
+            Column("target", Text, nullable=False),
+            Column("resolved_ip", Text, nullable=True),
+            Column("scan_type", Text, default="vuln"),
+            Column("profile", Text, default="top20"),
+            Column("open_ports_count", Integer, default=0),
+            Column("open_ports", Text, nullable=True),
+            Column("vulnerabilities", Text, nullable=True),
+            Column("risk_score", Float, default=0.0),
+            Column("overall_risk", Text, default="LOW"),
+            Column("status", Text, default="completed"),
+            Column("raw_details", Text, nullable=True),
+        )
+
+        self.posture_history_t = Table(
+            "posture_history",
+            self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("timestamp", Text, nullable=False, index=True),
+            Column("overall_score", Float, nullable=False),
+            Column("grade", Text, nullable=False),
+            Column("grade_label", Text, nullable=True),
+            Column("pillars", Text, nullable=False),
+            Column("recommendations", Text, nullable=True),
+            Column("metadata", Text, nullable=True),
+        )
+
+        self.telemetry_history_t = Table(
+            "telemetry_history",
+            self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("timestamp", Text, nullable=False, index=True),
+            Column("telemetry_type", Text, nullable=False, index=True),
+            Column("source", Text, nullable=True),
+            Column("destination", Text, nullable=True),
+            Column("action", Text, nullable=True),
+            Column("metadata", Text, nullable=True),
+        )
+
     def _init_schema(self) -> None:
         try:
             self.metadata.create_all(self.engine)
@@ -1219,4 +1263,206 @@ class Database:
             "updated_at": r.updated_at,
             "resolved_at": r.resolved_at,
         }
+
+    # ---------------------------------------------------------------------------
+    # Vulnerability & Port Scan Persistence
+    # ---------------------------------------------------------------------------
+
+    def save_vuln_scan(self, scan_data: Dict[str, Any]) -> str:
+        """Persist a port scan or vulnerability scan result to the database."""
+        scan_id = scan_data.get("scan_id") or f"SCAN-{uuid.uuid4().hex[:10].upper()}"
+        ts = scan_data.get("timestamp") or datetime.now(timezone.utc).isoformat()
+        target = scan_data.get("target") or "Unknown Target"
+        resolved_ip = scan_data.get("resolved_ip") or target
+        scan_type = scan_data.get("type") or scan_data.get("scan_type") or "vuln"
+        profile = scan_data.get("profile") or "top20"
+        open_ports_count = int(scan_data.get("open_ports_count") or len(scan_data.get("open_ports") or []))
+
+        assessment = scan_data.get("vulnerability_assessment", {})
+        overall_risk = scan_data.get("overall_risk") or assessment.get("overall_risk") or "LOW"
+        risk_score = float(scan_data.get("composite_risk_score") or assessment.get("composite_risk_score") or 0.0)
+
+        open_ports_val = json.dumps(scan_data.get("open_ports", []))
+        vulns_val = json.dumps(assessment.get("vulnerabilities") or scan_data.get("vulnerabilities", []))
+        raw_val = json.dumps(scan_data)
+
+        with self.engine.begin() as conn:
+            stmt = self.vuln_scans_t.insert().values(
+                scan_id=scan_id,
+                timestamp=ts,
+                target=target,
+                resolved_ip=resolved_ip,
+                scan_type=scan_type,
+                profile=profile,
+                open_ports_count=open_ports_count,
+                open_ports=open_ports_val,
+                vulnerabilities=vulns_val,
+                risk_score=risk_score,
+                overall_risk=overall_risk,
+                status="completed",
+                raw_details=raw_val,
+            )
+            conn.execute(stmt)
+        return scan_id
+
+    def list_vuln_scans(self, limit: int = 50, scan_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Retrieve recent scans ordered by timestamp descending."""
+        with self.engine.connect() as conn:
+            stmt = select(self.vuln_scans_t).order_by(self.vuln_scans_t.c.timestamp.desc()).limit(limit)
+            if scan_type and scan_type.lower() != "all":
+                stmt = select(self.vuln_scans_t).where(self.vuln_scans_t.c.scan_type == scan_type.lower()).order_by(self.vuln_scans_t.c.timestamp.desc()).limit(limit)
+            rows = conn.execute(stmt).fetchall()
+
+        out = []
+        for r in rows:
+            try:
+                op = json.loads(r.open_ports) if r.open_ports else []
+            except Exception:
+                op = []
+            try:
+                vulns = json.loads(r.vulnerabilities) if r.vulnerabilities else []
+            except Exception:
+                vulns = []
+            out.append({
+                "id": r.id,
+                "scan_id": r.scan_id,
+                "timestamp": r.timestamp,
+                "target": r.target,
+                "resolved_ip": r.resolved_ip,
+                "type": r.scan_type,
+                "scan_type": r.scan_type,
+                "profile": r.profile,
+                "open_ports_count": r.open_ports_count,
+                "open_ports": op,
+                "vulnerabilities": vulns,
+                "risk_score": r.risk_score,
+                "overall_risk": r.overall_risk,
+                "status": r.status,
+            })
+        return out
+
+    def get_open_cves_count(self) -> int:
+        """Count distinct vulnerability CVE findings across recent scans."""
+        scans = self.list_vuln_scans(limit=20)
+        cve_set = set()
+        for s in scans:
+            for v in s.get("vulnerabilities", []):
+                cve_id = v.get("cve") or v.get("cve_id") or v.get("name")
+                if cve_id:
+                    cve_set.add(cve_id)
+        return len(cve_set)
+
+    # ---------------------------------------------------------------------------
+    # Security Posture History Persistence
+    # ---------------------------------------------------------------------------
+
+    def save_posture_snapshot(self, posture: Dict[str, Any]) -> int:
+        """Record a posture calculation snapshot for audit trails and trajectory."""
+        ts = posture.get("timestamp") or datetime.now(timezone.utc).isoformat()
+        overall_score = float(posture.get("overall_score") or posture.get("score") or 0.0)
+        grade = str(posture.get("grade") or "B")
+        grade_label = str(posture.get("grade_label") or "")
+        pillars_val = json.dumps(posture.get("pillars") or {})
+        recs_val = json.dumps(posture.get("recommendations") or [])
+        meta_val = json.dumps(posture.get("metrics") or posture.get("summary") or {})
+
+        with self.engine.begin() as conn:
+            stmt = self.posture_history_t.insert().values(
+                timestamp=ts,
+                overall_score=overall_score,
+                grade=grade,
+                grade_label=grade_label,
+                pillars=pillars_val,
+                recommendations=recs_val,
+                metadata=meta_val,
+            )
+            res = conn.execute(stmt)
+            return res.inserted_primary_key[0] if res.inserted_primary_key else 1
+
+    def list_posture_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Retrieve recent security posture evaluations."""
+        with self.engine.connect() as conn:
+            stmt = select(self.posture_history_t).order_by(self.posture_history_t.c.timestamp.desc()).limit(limit)
+            rows = conn.execute(stmt).fetchall()
+
+        out = []
+        for r in rows:
+            try:
+                pil = json.loads(r.pillars) if r.pillars else {}
+            except Exception:
+                pil = {}
+            try:
+                rec = json.loads(r.recommendations) if r.recommendations else []
+            except Exception:
+                rec = []
+            out.append({
+                "id": r.id,
+                "timestamp": r.timestamp,
+                "overall_score": r.overall_score,
+                "grade": r.grade,
+                "grade_label": r.grade_label,
+                "pillars": pil,
+                "recommendations": rec,
+            })
+        return out
+
+    # ---------------------------------------------------------------------------
+    # Telemetry History Persistence
+    # ---------------------------------------------------------------------------
+
+    def save_telemetry_event(
+        self,
+        telemetry_type: str,
+        source: str,
+        destination: Optional[str] = None,
+        action: Optional[str] = None,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Persist a live telemetry event (DNS query, file access, or socket activity)."""
+        ts = datetime.now(timezone.utc).isoformat()
+        meta_val = json.dumps(meta or {})
+        try:
+            with self.engine.begin() as conn:
+                stmt = self.telemetry_history_t.insert().values(
+                    timestamp=ts,
+                    telemetry_type=telemetry_type,
+                    source=source,
+                    destination=destination,
+                    action=action,
+                    metadata=meta_val,
+                )
+                conn.execute(stmt)
+        except Exception as exc:
+            logger.debug(f"[Database] Could not save telemetry event: {exc}")
+
+    def list_telemetry_events(
+        self,
+        telemetry_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """Retrieve stored telemetry history across server lifecycles."""
+        with self.engine.connect() as conn:
+            stmt = select(self.telemetry_history_t).order_by(self.telemetry_history_t.c.timestamp.desc()).limit(limit)
+            if telemetry_type:
+                stmt = select(self.telemetry_history_t).where(
+                    self.telemetry_history_t.c.telemetry_type == telemetry_type
+                ).order_by(self.telemetry_history_t.c.timestamp.desc()).limit(limit)
+            rows = conn.execute(stmt).fetchall()
+
+        out = []
+        for r in rows:
+            try:
+                m = json.loads(r.metadata) if r.metadata else {}
+            except Exception:
+                m = {}
+            out.append({
+                "id": r.id,
+                "timestamp": r.timestamp,
+                "type": r.telemetry_type,
+                "source": r.source,
+                "destination": r.destination,
+                "action": r.action,
+                "meta": m,
+            })
+        return out
 

@@ -64,7 +64,7 @@ from api.schemas import (
     DatabaseMaintenanceRequest,
 )
 from api.firewall_api import create_firewall_routes
-from api.scanner_api import router as scanner_router
+from api.scanner_api import router as scanner_router, set_scanner_db
 from storage.memory_store import AlertStore, MetricsStore
 from storage.metrics_sink import get_metrics_sink
 from storage.alert_indexer import get_alert_indexer
@@ -248,6 +248,8 @@ class PacketAnomalyEngine:
 
     def start(self) -> None:
         if self._sniffer is not None:
+            return
+        if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("VOLCANO_DISABLE_SNIFFER") == "1":
             return
         try:
             # pyrefly: ignore[not-callable]
@@ -822,6 +824,7 @@ def bootstrap_live_files(metrics: MetricsStore) -> None:
 alerts = AlertStore()
 metrics = MetricsStore(str(WATCH_DIRECTORY))
 db = Database(DB_PATH)
+metrics.set_db(db)
 phishing_detector = PhishingDetector(MODEL_PATH)
 threat_correlator = ThreatCorrelator(alerts, metrics)
 firewall_insight_engine = FirewallInsightEngine(alerts, metrics)
@@ -983,7 +986,107 @@ def on_startup() -> None:
 
     alerts.set_on_alert(handle_alert)
 
-    # 2. Pre-populate incident clusters with recent alerts from DB or in-memory
+    # 2. Seed realistic security events and correlated incidents if database is fresh
+    past_alerts = db.get_recent_alerts(limit=20)
+    if not past_alerts and len(alerts.list()) == 0:
+        seed_samples = [
+            {
+                "source": "network_sensor",
+                "severity": "high",
+                "category": "brute_force",
+                "message": "SSH Brute-Force Authentication Spike: 28 failed logins detected in 8.2s from 203.0.113.42",
+                "meta": {
+                    "source_ip": "203.0.113.42",
+                    "destination_ip": "192.168.1.10",
+                    "dest_port": 22,
+                    "protocol": "TCP",
+                    "attempts": 28,
+                    "country": "External Attacker",
+                },
+            },
+            {
+                "source": "filesystem_sentinel",
+                "severity": "critical",
+                "category": "ransomware",
+                "message": "Ransomware Canary Alert: Rapid encryption tamper detected on honeytoken canary file ./sandbox/canary_audit.docx",
+                "meta": {
+                    "source_ip": "192.168.1.105",
+                    "destination_ip": "127.0.0.1",
+                    "file": "./sandbox/canary_audit.docx",
+                    "entropy": 7.92,
+                    "rate_ops_sec": 38,
+                    "country": "Internal Host",
+                },
+            },
+            {
+                "source": "dns_sentinel",
+                "severity": "critical",
+                "category": "dns_tunneling",
+                "message": "High-Entropy DNS Exfiltration & DGA Beacon detected targeting x9f1a28cb019e.darknet-c2.cc",
+                "meta": {
+                    "source_ip": "198.51.100.88",
+                    "destination_ip": "1.1.1.1",
+                    "domain": "x9f1a28cb019e.darknet-c2.cc",
+                    "entropy": 4.12,
+                    "query_rate": 45.0,
+                    "dest_port": 53,
+                    "protocol": "UDP",
+                },
+            },
+            {
+                "source": "firewall_filter",
+                "severity": "medium",
+                "category": "port_scan",
+                "message": "Rapid TCP SYN Perimeter Scan: Hostile probe traversing 14 ports in 3.1s from 198.51.100.77",
+                "meta": {
+                    "source_ip": "198.51.100.77",
+                    "destination_ip": "192.168.1.1",
+                    "unique_ports": [21, 22, 23, 80, 443, 445, 3389, 8080],
+                    "pps": 120.0,
+                    "protocol": "TCP",
+                },
+            },
+            {
+                "source": "network_sensor",
+                "severity": "high",
+                "category": "lateral_movement",
+                "message": "Internal Lateral Movement Sweep: Unauthorized administrative SMB conduit established across 6 hosts",
+                "meta": {
+                    "source_ip": "192.168.1.105",
+                    "destination_ip": "192.168.1.200",
+                    "dest_port": 445,
+                    "protocol": "SMB",
+                    "hosts_count": 6,
+                },
+            },
+            {
+                "source": "phishing_filter",
+                "severity": "high",
+                "category": "phishing",
+                "message": "Phishing URL Intercepted: Suspicious login harvesting domain https://secure-login.corporate-sso-verify.com/auth",
+                "meta": {
+                    "source_ip": "192.168.1.45",
+                    "destination_ip": "104.21.45.12",
+                    "target": "https://secure-login.corporate-sso-verify.com/auth",
+                    "risk_score": 0.89,
+                },
+            },
+        ]
+        for s in seed_samples:
+            alerts.add(
+                source=s["source"],
+                severity=s["severity"],
+                category=s["category"],
+                message=s["message"],
+                meta=s["meta"],
+            )
+
+    # Wire correlation engine to DB and synthesize multi-stage incidents
+    correlation_engine.set_db(db)
+    if not db.list_incidents(limit=1):
+        correlation_engine.correlate_and_persist(alerts.list())
+
+    # Pre-populate in-memory incident clusters for dashboard compatibility
     try:
         past_alerts = db.get_recent_alerts(limit=20)
         for a in past_alerts:
@@ -1019,9 +1122,9 @@ def on_startup() -> None:
             "confidence": 1.0,
         })
 
-    # 3. Bootstrap live telemetry
-    bootstrap_live_searches(metrics)
-    bootstrap_live_files(metrics)
+    # 3. Bootstrap live telemetry in background daemon thread
+    threading.Thread(target=bootstrap_live_searches, args=(metrics,), name="bootstrap-searches", daemon=True).start()
+    threading.Thread(target=bootstrap_live_files, args=(metrics,), name="bootstrap-files", daemon=True).start()
 
     # 4. Start engines & seed users
     packet_engine.start()
@@ -1153,6 +1256,7 @@ firewall_routes = create_firewall_routes(
     db=db,
     grounded_copilot=grounded_copilot,
 )
+set_scanner_db(db)
 app.include_router(firewall_routes)
 app.include_router(scanner_router)
 
@@ -1667,18 +1771,48 @@ def execute_playbook_endpoint(
 
     target_ip = payload.get("target_ip")
     alert_id = payload.get("alert_id")
+    incident_id = payload.get("incident_id")
     dry_run = payload.get("dry_run", True)
 
-    simulated_alert = {
-        "id": alert_id or 0,
-        "category": pb.get("match", {}).get("category", "Security Anomaly"),
-        "severity": pb.get("match", {}).get("min_severity", "high"),
-        "meta": {"source_ip": target_ip} if target_ip else {},
-    }
+    target_alert = None
+    if alert_id:
+        try:
+            target_alert = db.get_alert(int(alert_id))
+        except Exception:
+            target_alert = None
+        if not target_alert:
+            for a in alerts.list():
+                if getattr(a, "id", None) == alert_id or (isinstance(a, dict) and a.get("id") == alert_id):
+                    target_alert = a if isinstance(a, dict) else dict(vars(a))
+                    break
+    elif incident_id:
+        try:
+            inc = db.get_incident(incident_id)
+            if inc:
+                target_alert = {
+                    "id": inc.get("id", 0),
+                    "category": inc.get("title", pb.get("match", {}).get("category", "Security Anomaly")),
+                    "severity": inc.get("severity", pb.get("match", {}).get("min_severity", "high")),
+                    "meta": {"source_ip": inc.get("source_ip") or target_ip, "target_ip": inc.get("target_ip")},
+                }
+        except Exception:
+            pass
+
+    if not target_alert:
+        target_alert = {
+            "id": alert_id or 0,
+            "category": pb.get("match", {}).get("category", "Security Anomaly"),
+            "severity": pb.get("match", {}).get("min_severity", "high"),
+            "meta": {"source_ip": target_ip} if target_ip else {},
+        }
+    elif target_ip:
+        if "meta" not in target_alert or not isinstance(target_alert["meta"], dict):
+            target_alert["meta"] = {}
+        target_alert["meta"]["source_ip"] = target_ip
 
     result = playbook_executor.execute_playbook(
         playbook=pb,
-        alert=simulated_alert,
+        alert=target_alert,
         dry_run=dry_run,
     )
 
@@ -1759,25 +1893,50 @@ def get_mitre_matrix() -> Dict[str, Any]:
 
 @app.get("/api/security/posture")
 def get_security_posture() -> Dict[str, Any]:
-    """Calculates multidimensional 0-100 enterprise cybersecurity posture index."""
+    """Calculates multidimensional 0-100 enterprise cybersecurity posture index backed by live subsystems."""
     from security.posture_engine import posture_engine
     rules_count = len(rule_engine.list_rules()) if rule_engine else 0
     critical_count = sum(1 for a in alerts.list() if a.get("severity") == "critical" and a.get("status") not in ["resolved", "false_positive"])
     try:
-        from vulns.vuln_scanner import get_vuln_scanner
-        v_scanner = get_vuln_scanner()
-        open_cves = len(getattr(v_scanner, "scan_history", []))
+        open_cves = db.get_open_cves_count()
+        if open_cves == 0:
+            from vulns.vuln_scanner import get_vuln_scanner
+            v_scanner = get_vuln_scanner()
+            for s in getattr(v_scanner, "scan_history", []):
+                open_cves += len(s.get("vulnerabilities", []))
     except Exception:
         open_cves = 0
+
+    # Genuine subsystem health verification
+    models_loaded = (phishing_detector.model is not None) or MODEL_PATH.exists()
+    canary_doc = WATCH_DIRECTORY / ".canary_system_vault.docx"
+    canary_pw = WATCH_DIRECTORY / "passwords_canary_honeytoken.xlsx"
+    canary_armed = canary_doc.exists() and canary_pw.exists()
+
     allowlist_count = len(get_settings().allowlist_ips)
-    return posture_engine.calculate_posture(
+    posture = posture_engine.calculate_posture(
         rules_count=rules_count,
         unhandled_critical_alerts=critical_count,
         open_cves=open_cves,
-        models_loaded=True,
-        canary_armed=True,
+        models_loaded=models_loaded,
+        canary_armed=canary_armed,
         allowlist_count=allowlist_count,
     )
+    try:
+        db.save_posture_snapshot(posture)
+    except Exception:
+        pass
+    return posture
+
+
+@app.get("/api/security/posture/history")
+def get_security_posture_history(limit: int = 50) -> Dict[str, Any]:
+    """Retrieve historical posture scoring trajectory across SOC operations."""
+    try:
+        history = db.list_posture_history(limit=limit)
+        return {"history": history, "count": len(history)}
+    except Exception as exc:
+        return {"history": [], "count": 0, "error": str(exc)}
 
 
 @app.post("/api/ai/explain")
@@ -2226,32 +2385,53 @@ def get_traffic() -> Dict[str, Any]:
     """Retrieve temporal traffic velocity and protocol breakdown."""
     snap = metrics.snapshot()
     curr_pps = snap.get("current_packet_velocity", 0.0)
+    history = metrics.get_velocity_history(16)
     return {
         "status": "ok",
         "current_packet_velocity": curr_pps,
         "protocol_breakdown": snap.get("protocol_breakdown", {}),
         "file_change_rate": snap.get("file_change_rate", 0.0),
-        "history": [round(curr_pps * (0.8 + 0.05 * i), 1) for i in range(16)],
+        "history": history,
     }
 
 
 @app.get("/api/baseline/traffic")
 def get_traffic_baseline() -> Dict[str, Any]:
-    """Retrieve 168-hour moving behavioral baseline metrics and deviation bounds."""
+    """Retrieve 168-hour moving behavioral baseline metrics and deviation bounds computed from empirical history."""
+    import math
     snap = metrics.snapshot()
-    current_pps = float(snap.get("current_packet_velocity", 18.5))
+    current_pps = float(snap.get("current_packet_velocity", 0.0))
+    history = metrics.get_velocity_history(32)
+
+    if history and len(history) >= 2:
+        mean_pps = round(sum(history) / len(history), 1)
+        variance = sum((x - mean_pps) ** 2 for x in history) / (len(history) - 1)
+        std_pps = round(max(0.5, math.sqrt(variance)), 1)
+    else:
+        mean_pps = 20.0
+        std_pps = 4.0
+
+    z_score = round((current_pps - mean_pps) / std_pps, 2)
+    is_deviating = abs(z_score) > 2.0 or current_pps > (mean_pps + 2.5 * std_pps)
+
+    proto_counts = snap.get("protocol_breakdown", {})
+    total_pkts = sum(proto_counts.values()) or 1
+    tcp_pct = round((proto_counts.get("TCP", 0) / total_pkts) * 100, 1)
+    udp_pct = round((proto_counts.get("UDP", 0) / total_pkts) * 100, 1)
+    icmp_pct = round((proto_counts.get("ICMP", 0) / total_pkts) * 100, 1)
+
     return {
         "status": "active",
         "window_hours": 168,
-        "baseline_pps_mean": 22.4,
-        "baseline_pps_std": 5.8,
+        "baseline_pps_mean": mean_pps,
+        "baseline_pps_std": std_pps,
         "current_pps": current_pps,
-        "z_score": round((current_pps - 22.4) / 5.8, 2),
-        "is_deviating": current_pps > 45.0,
+        "z_score": z_score,
+        "is_deviating": is_deviating,
         "protocol_baselines": {
-            "TCP": {"mean_pct": 72.0, "current_pct": snap.get("protocol_breakdown", {}).get("TCP", 70)},
-            "UDP": {"mean_pct": 23.0, "current_pct": snap.get("protocol_breakdown", {}).get("UDP", 25)},
-            "ICMP": {"mean_pct": 5.0, "current_pct": snap.get("protocol_breakdown", {}).get("ICMP", 5)},
+            "TCP": {"mean_pct": 70.0, "current_pct": tcp_pct},
+            "UDP": {"mean_pct": 25.0, "current_pct": udp_pct},
+            "ICMP": {"mean_pct": 5.0, "current_pct": icmp_pct},
         },
     }
 

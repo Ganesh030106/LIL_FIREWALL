@@ -99,11 +99,12 @@ export default function IncidentsTab({ currentUser }) {
             const res = await apiFetch("/api/incidents/correlate", { method: "POST" });
             if (!res.ok) throw new Error("Correlation engine evaluation failed");
             const data = await res.json();
-            setActionMsg(`✓ Correlation complete. Processed ${data.correlated_alerts_count || 0} alerts ➔ ${data.incidents_created || 0} new, ${data.incidents_updated || 0} updated incidents.`);
+            const count = data.incidents_count ?? (Array.isArray(data.incidents) ? data.incidents.length : 0);
+            setActionMsg(`✓ Threat correlation complete. Evaluated active alert telemetry into ${count} correlated security incident${count === 1 ? "" : "s"}.`);
             const refreshed = await fetchIncidents();
             if (refreshed.length > 0) {
                 // Keep selected or pick first
-                setSelectedIncident(prev => prev ? refreshed.find(i => i.id === prev.id) || refreshed[0] : refreshed[0]);
+                setSelectedIncident(prev => prev ? refreshed.find(i => (i.incident_id && i.incident_id === prev.incident_id) || i.id === prev.id) || refreshed[0] : refreshed[0]);
             }
         } catch (e) {
             setError(e.message || "Error correlating alerts");
@@ -237,20 +238,50 @@ export default function IncidentsTab({ currentUser }) {
         });
     }, [incidents, filterStatus, filterSeverity, searchQuery]);
 
+    // Helper to format risk score normalized to 0-100 scale
+    const formatRisk = (r) => {
+        const n = Number(r) || 0;
+        return n <= 1.0 ? Math.round(n * 100) : Math.round(n);
+    };
+
     // Top metrics
     const stats = useMemo(() => {
         const total = incidents.length;
         const active = incidents.filter(i => i.status === "new" || i.status === "investigating").length;
-        const critical = incidents.filter(i => i.severity === "critical").length;
+        const critical = incidents.filter(i => String(i.severity).toLowerCase() === "critical").length;
         const avgRisk = total > 0
-            ? Math.round(incidents.reduce((acc, i) => acc + (Number(i.risk_score) || 0), 0) / total)
+            ? Math.round(incidents.reduce((acc, i) => acc + formatRisk(i.risk_score), 0) / total)
             : 0;
         return { total, active, critical, avgRisk };
     }, [incidents]);
 
-    // Helper to evaluate kill chain stage reached
+    // Helper to evaluate kill chain stage reached with flexible key/label matching
     const getStageIndex = (stageKey) => {
-        const idx = KILL_CHAIN_STAGES.findIndex(s => s.key === stageKey);
+        if (!stageKey) return 0;
+        const clean = String(stageKey).toLowerCase().replace(/[\s_-]+/g, "");
+        const aliasMap = {
+            reconnaissance: "reconnaissance",
+            discovery: "reconnaissance",
+            initialaccess: "initial_access",
+            credentialaccess: "initial_access",
+            defenseevasion: "initial_access",
+            privilegeescalation: "execution",
+            execution: "execution",
+            persistence: "persistence",
+            lateralmovement: "lateral_movement",
+            commandandcontrol: "command_and_control",
+            c2beaconing: "command_and_control",
+            c2: "command_and_control",
+            exfiltration: "exfiltration",
+            impact: "exfiltration",
+            actiononobjectives: "exfiltration",
+        };
+        const targetKey = aliasMap[clean] || clean;
+        const idx = KILL_CHAIN_STAGES.findIndex(s => {
+            const kClean = s.key.toLowerCase().replace(/[\s_-]+/g, "");
+            const lClean = s.label.toLowerCase().replace(/[\s_-]+/g, "");
+            return s.key === targetKey || kClean === clean || lClean === clean || clean.includes(kClean) || kClean.includes(clean);
+        });
         return idx !== -1 ? idx : 0;
     };
 
@@ -400,13 +431,14 @@ export default function IncidentsTab({ currentUser }) {
                             </div>
                         ) : (
                             filteredIncidents.map(inc => {
-                                const isSelected = selectedIncident?.id === inc.id;
+                                const isSelected = selectedIncident?.id === inc.id || (selectedIncident?.incident_id && selectedIncident.incident_id === inc.incident_id);
                                 const isCritical = inc.severity === "critical";
                                 const isHigh = inc.severity === "high";
+                                const riskVal = formatRisk(inc.risk_score);
 
                                 return (
                                     <div
-                                        key={inc.id}
+                                        key={inc.id || inc.incident_id}
                                         onClick={() => { setSelectedIncident(inc); setPlaybookResult(null); setPcapHash(""); }}
                                         style={{
                                             padding: "12px 14px",
@@ -430,18 +462,18 @@ export default function IncidentsTab({ currentUser }) {
                                                     padding: "2px 6px",
                                                     borderRadius: "4px"
                                                 }}>
-                                                    {inc.id}
+                                                    {inc.incident_id || `INC-${inc.id}`}
                                                 </span>
                                                 <span className={`badge ${isCritical ? "badge-critical" : isHigh ? "badge-danger" : "badge-safe"}`} style={{ fontSize: "10px", padding: "1px 6px" }}>
-                                                    {inc.severity.toUpperCase()}
+                                                    {String(inc.severity).toUpperCase()}
                                                 </span>
                                             </div>
                                             <span style={{
                                                 fontSize: "11px",
                                                 fontWeight: 700,
-                                                color: inc.risk_score >= 80 ? "var(--critical)" : inc.risk_score >= 50 ? "var(--warning)" : "var(--safe)"
+                                                color: riskVal >= 80 ? "var(--critical)" : riskVal >= 50 ? "var(--warning)" : "var(--safe)"
                                             }}>
-                                                Risk {inc.risk_score}
+                                                Risk {riskVal}/100
                                             </span>
                                         </div>
 
@@ -468,7 +500,7 @@ export default function IncidentsTab({ currentUser }) {
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px", fontSize: "11px", color: "var(--text-muted)" }}>
                                             <span>⚡ {inc.alert_count || 1} correlated alerts</span>
                                             <span style={{ color: "var(--accent)", textTransform: "capitalize" }}>
-                                                📍 {inc.kill_chain_stage ? inc.kill_chain_stage.replace(/_/g, " ") : "Initial Access"}
+                                                📍 {inc.kill_chain_stage ? String(inc.kill_chain_stage).replace(/_/g, " ") : "Initial Access"}
                                             </span>
                                         </div>
                                     </div>
@@ -495,13 +527,20 @@ export default function IncidentsTab({ currentUser }) {
                                             padding: "3px 8px",
                                             borderRadius: "4px"
                                         }}>
-                                            {selectedIncident.id}
+                                            {selectedIncident.incident_id || `INC-${selectedIncident.id}`}
                                         </span>
                                         <span className={`badge ${selectedIncident.severity === "critical" ? "badge-critical" : "badge-danger"}`}>
-                                            {selectedIncident.severity.toUpperCase()}
+                                            {String(selectedIncident.severity).toUpperCase()}
+                                        </span>
+                                        <span style={{
+                                            fontSize: "12px",
+                                            fontWeight: 700,
+                                            color: formatRisk(selectedIncident.risk_score) >= 80 ? "var(--critical)" : formatRisk(selectedIncident.risk_score) >= 50 ? "var(--warning)" : "var(--safe)"
+                                        }}>
+                                            Risk {formatRisk(selectedIncident.risk_score)}/100
                                         </span>
                                         <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                                            Created: {new Date(selectedIncident.created_at).toLocaleString()}
+                                            Created: {selectedIncident.created_at ? new Date(selectedIncident.created_at).toLocaleString() : "Active"}
                                         </span>
                                     </div>
                                     <h2 style={{ fontSize: "1.3rem", fontWeight: 700, margin: "4px 0" }}>
@@ -625,7 +664,12 @@ export default function IncidentsTab({ currentUser }) {
                                     <div>
                                         <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px" }}>Tactics Identified:</div>
                                         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                                            {(selectedIncident.mitre_tactics || ["Initial Access"]).map((t, i) => (
+                                            {(Array.isArray(selectedIncident.mitre_tactics) && selectedIncident.mitre_tactics.length > 0
+                                                ? selectedIncident.mitre_tactics
+                                                : typeof selectedIncident.mitre_tactics === "string" && selectedIncident.mitre_tactics
+                                                ? [selectedIncident.mitre_tactics]
+                                                : ["Initial Access"]
+                                            ).map((t, i) => (
                                                 <span key={i} className="badge badge-medium" style={{ fontSize: "11px" }}>
                                                     {t}
                                                 </span>
@@ -636,7 +680,12 @@ export default function IncidentsTab({ currentUser }) {
                                     <div>
                                         <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px" }}>Techniques Detected:</div>
                                         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                                            {(selectedIncident.mitre_techniques || ["T1110"]).map((t, i) => (
+                                            {(Array.isArray(selectedIncident.mitre_techniques) && selectedIncident.mitre_techniques.length > 0
+                                                ? selectedIncident.mitre_techniques
+                                                : typeof selectedIncident.mitre_techniques === "string" && selectedIncident.mitre_techniques
+                                                ? [selectedIncident.mitre_techniques]
+                                                : ["T1110"]
+                                            ).map((t, i) => (
                                                 <span key={i} className="badge badge-critical" style={{ fontSize: "11px", fontFamily: "var(--font-mono)" }}>
                                                     {t}
                                                 </span>
@@ -789,12 +838,17 @@ export default function IncidentsTab({ currentUser }) {
 
                             {/* Timeline of notes */}
                             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px", maxHeight: "240px", overflowY: "auto" }}>
-                                {(!selectedIncident.analyst_notes || selectedIncident.analyst_notes.length === 0) ? (
+                                {(!selectedIncident.analyst_notes || (Array.isArray(selectedIncident.analyst_notes) && selectedIncident.analyst_notes.length === 0)) ? (
                                     <div style={{ fontSize: "12px", color: "var(--text-muted)", fontStyle: "italic" }}>
                                         No analyst case notes recorded yet. Add initial assessment below.
                                     </div>
                                 ) : (
-                                    selectedIncident.analyst_notes.map((n, i) => (
+                                    (Array.isArray(selectedIncident.analyst_notes)
+                                        ? selectedIncident.analyst_notes
+                                        : typeof selectedIncident.analyst_notes === "string"
+                                        ? [{ note: selectedIncident.analyst_notes, author: "Analyst", created_at: selectedIncident.created_at }]
+                                        : []
+                                    ).map((n, i) => (
                                         <div key={i} style={{
                                             padding: "10px 12px",
                                             borderRadius: "6px",
@@ -807,7 +861,7 @@ export default function IncidentsTab({ currentUser }) {
                                                 <span>{n.created_at ? new Date(n.created_at).toLocaleString() : "Just now"}</span>
                                             </div>
                                             <div style={{ color: "var(--text-primary)", whiteSpace: "pre-wrap" }}>
-                                                {n.note}
+                                                {n.note || (typeof n === "string" ? n : JSON.stringify(n))}
                                             </div>
                                         </div>
                                     ))

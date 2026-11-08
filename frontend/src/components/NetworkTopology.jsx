@@ -18,26 +18,33 @@ export default function NetworkTopology({ devices = [], sessions = [], onRefresh
             { id: "GW-EXT", label: "Edge Gateway", type: "gateway", x: 380, y: 80, risk: 15, ip: "10.0.0.1" },
         ];
 
-        // Device nodes dynamically mapped around the perimeter
-        const devList = Array.isArray(devices) && devices.length > 0 ? devices : [
-            { ip: "192.168.1.105", mac: "00:1A:2B:44:55:66", risk_score: 0.85, role: "Hostile Endpoint" },
-            { ip: "192.168.1.120", mac: "00:1A:2B:77:88:99", risk_score: 0.20, role: "Workstation-A" },
-            { ip: "192.168.1.145", mac: "00:1A:2B:11:22:33", risk_score: 0.45, role: "Database Server" },
-            { ip: "10.0.0.50", mac: "00:1A:2B:AA:BB:CC", risk_score: 0.10, role: "App Gateway" },
-        ];
+        // Real device nodes mapped dynamically around perimeter
+        const devList = Array.isArray(devices) ? [...devices] : [];
+
+        // If active sessions contain IPs not in devList, dynamically enrich the topology
+        if (Array.isArray(sessions) && sessions.length > 0) {
+            const knownIps = new Set(devList.map(d => d.ip).filter(Boolean));
+            sessions.forEach(s => {
+                const sip = s.src_ip || s.src;
+                if (sip && sip !== "127.0.0.1" && !knownIps.has(sip) && devList.length < 12) {
+                    knownIps.add(sip);
+                    devList.push({ ip: sip, risk_score: s.state === "blocked" ? 0.85 : 0.15, role: "Active Endpoint" });
+                }
+            });
+        }
 
         const cx = 260;
         const cy = 200;
         const radius = 150;
 
-        devList.slice(0, 8).forEach((d, idx) => {
-            const angle = (idx / Math.min(8, devList.length)) * 2 * Math.PI + 0.5;
+        devList.slice(0, 10).forEach((d, idx) => {
+            const angle = (idx / Math.max(1, Math.min(10, devList.length))) * 2 * Math.PI + 0.5;
             const x = Math.round(cx + radius * Math.cos(angle));
             const y = Math.round(cy + radius * Math.sin(angle));
             const risk = Math.round((Number(d.risk_score || d.risk || 0)) * 100);
 
             nodes.push({
-                id: d.ip || `DEV-${idx}`,
+                id: d.ip || (d.mac ? `Host-${d.mac.slice(-5)}` : `DEV-${idx}`),
                 label: d.ip || (d.mac ? `Host-${d.mac.slice(-5)}` : `Host-${idx}`),
                 type: "device",
                 x: Math.max(60, Math.min(460, x)),
@@ -48,28 +55,45 @@ export default function NetworkTopology({ devices = [], sessions = [], onRefresh
             });
         });
 
-        // Communication links
+        // Communication links mapped from live session pipeline
         const links = [
-            { source: "AI-SENSOR", target: "FW-CORE", protocol: "TLS", packets: 1240, status: "secure" },
-            { source: "GW-EXT", target: "FW-CORE", protocol: "TCP", packets: 3410 + (sessions.length * 10), status: "active" },
+            { source: "AI-SENSOR", target: "FW-CORE", protocol: "TLS", packets: 128, status: "secure" },
         ];
 
-        // Connect device nodes to firewall core or gateway
-        nodes.filter(n => n.type === "device").forEach((dn, idx) => {
-            const proto = idx % 3 === 0 ? "DNS" : (idx % 2 === 0 ? "TCP" : "HTTP");
-            const isSuspicious = dn.risk >= 60;
-            links.push({
-                source: "FW-CORE",
-                target: dn.id,
-                protocol: proto,
-                packets: Math.max(45, (idx + 1) * 220),
-                status: isSuspicious ? "suspicious" : "active",
-                targetNode: dn,
+        if (Array.isArray(sessions) && sessions.length > 0) {
+            sessions.slice(0, 20).forEach((s) => {
+                const sIp = s.src_ip || s.src;
+                const targetNode = nodes.find(n => n.ip === sIp || n.id === sIp);
+                if (targetNode) {
+                    const isBlocked = s.state === "blocked" || targetNode.risk >= 70;
+                    links.push({
+                        source: targetNode.id,
+                        target: "FW-CORE",
+                        protocol: s.protocol || "TCP",
+                        packets: s.packets_sent || s.packet_count || 1,
+                        status: isBlocked ? "suspicious" : "active",
+                        targetNode,
+                    });
+                }
             });
-        });
+        }
+
+        // If nodes exist but no specific session links, wire active devices to FW-CORE
+        if (links.length <= 1 && nodes.some(n => n.type === "device")) {
+            nodes.filter(n => n.type === "device").forEach(dn => {
+                links.push({
+                    source: "FW-CORE",
+                    target: dn.id,
+                    protocol: "IP",
+                    packets: 1,
+                    status: dn.risk >= 60 ? "suspicious" : "active",
+                    targetNode: dn,
+                });
+            });
+        }
 
         return { nodes, links };
-    }, [devices]);
+    }, [devices, sessions]);
 
     const filteredNodes = useMemo(() => {
         if (!searchIp.trim()) return topology.nodes;

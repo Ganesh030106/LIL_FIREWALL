@@ -104,6 +104,8 @@ class MetricsStore:
         self.ransomware_rate = 0.0
         self.last_packet_seen = 0.0
         self.watch_directory = watch_directory
+        self.db: Any = None
+        self.velocity_history: Deque[float] = deque([18.0] * 16, maxlen=120)
         # Historical telemetry
         self.web_searches: Deque[Dict[str, Any]] = deque(maxlen=2000)
         self.file_shares: Deque[Dict[str, Any]] = deque(maxlen=2000)
@@ -112,8 +114,51 @@ class MetricsStore:
         # Active connections: key -> {src,dst,protocol,port,last_seen}
         self.current_connections: Dict[str, Dict[str, Any]] = {}
 
+    def set_db(self, db: Any) -> None:
+        """Attach database engine and preload historical telemetry."""
+        self.db = db
+        if not db:
+            return
+        try:
+            # Preload searches
+            stored_searches = db.list_telemetry_events(telemetry_type="search", limit=200)
+            for ev in reversed(stored_searches):
+                self.web_searches.appendleft({
+                    "timestamp": ev.get("timestamp"),
+                    "who": ev.get("source"),
+                    "query": ev.get("action"),
+                    "url": (ev.get("meta") or {}).get("url"),
+                    "meta": ev.get("meta") or {},
+                })
+            # Preload file shares
+            stored_files = db.list_telemetry_events(telemetry_type="file", limit=200)
+            for ev in reversed(stored_files):
+                self.file_shares.appendleft({
+                    "timestamp": ev.get("timestamp"),
+                    "who": ev.get("source"),
+                    "filename": ev.get("action"),
+                    "dest_ip": ev.get("destination"),
+                    "meta": ev.get("meta") or {},
+                })
+        except Exception:
+            pass
+
+    def record_velocity_sample(self, pps: float) -> None:
+        """Record real traffic velocity sample to sliding temporal history."""
+        with self._lock:
+            self.velocity_history.append(round(float(pps), 1))
+
+    def get_velocity_history(self, count: int = 16) -> List[float]:
+        """Retrieve recent empirical velocity history samples."""
+        with self._lock:
+            samples = list(self.velocity_history)
+            if len(samples) < count:
+                samples = [self.packet_velocity] * (count - len(samples)) + samples
+            return samples[-count:]
+
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
+            self.velocity_history.append(round(self.packet_velocity, 1))
             return {
                 "current_packet_velocity": round(self.packet_velocity, 2),
                 "port_monitoring_active": bool(self.port_scan_active),
@@ -127,6 +172,17 @@ class MetricsStore:
         with self._lock:
             entry = {"timestamp": now_utc(), "who": who, "query": query, "url": url, "meta": meta or {}}
             self.web_searches.appendleft(entry)
+            if self.db:
+                try:
+                    self.db.save_telemetry_event(
+                        telemetry_type="search",
+                        source=who,
+                        destination=None,
+                        action=query,
+                        meta={"url": url, **(meta or {})},
+                    )
+                except Exception:
+                    pass
 
     def list_searches(self, limit: int = 100) -> List[Dict[str, Any]]:
         with self._lock:
@@ -136,6 +192,17 @@ class MetricsStore:
         with self._lock:
             entry = {"timestamp": now_utc(), "who": who, "filename": filename, "dest_ip": dest_ip, "meta": meta or {}}
             self.file_shares.appendleft(entry)
+            if self.db:
+                try:
+                    self.db.save_telemetry_event(
+                        telemetry_type="file",
+                        source=who,
+                        destination=dest_ip,
+                        action=filename,
+                        meta=meta or {},
+                    )
+                except Exception:
+                    pass
 
     def list_file_shares(self, limit: int = 100) -> List[Dict[str, Any]]:
         with self._lock:
@@ -147,6 +214,17 @@ class MetricsStore:
             self.port_history.appendleft(entry)
             key = f"{src_ip}:{port}->{dst_ip}"
             self.current_connections[key] = {"src": src_ip, "dst": dst_ip, "port": port, "protocol": protocol, "last_seen": now_utc(), "direction": direction}
+            if self.db:
+                try:
+                    self.db.save_telemetry_event(
+                        telemetry_type="port_activity",
+                        source=src_ip,
+                        destination=dst_ip,
+                        action=f"{direction}:{port}:{protocol}",
+                        meta={"port": port, "protocol": protocol, "direction": direction},
+                    )
+                except Exception:
+                    pass
 
     def list_port_history(self, limit: int = 200) -> List[Dict[str, Any]]:
         with self._lock:

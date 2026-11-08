@@ -1,9 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { apiFetch } from "../services/api";
 
 export default function DeviceProfileDrawer({ device, onClose, onActionComplete }) {
     const [containing, setContaining] = useState(false);
     const [actionMsg, setActionMsg] = useState("");
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === "Escape") onClose();
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [onClose]);
 
     if (!device) return null;
 
@@ -36,27 +45,27 @@ export default function DeviceProfileDrawer({ device, onClose, onActionComplete 
         setContaining(false);
     };
 
-    return (
-        <div className="incident-drawer-backdrop" onClick={onClose}>
-            <div className="incident-drawer-content" onClick={e => e.stopPropagation()} style={{ maxWidth: "560px" }}>
-                <div className="incident-drawer-header">
+    const drawerContent = (
+        <div className="incident-drawer-backdrop" onClick={onClose} style={{ zIndex: 10000 }}>
+            <div className="incident-drawer" onClick={e => e.stopPropagation()} style={{ maxWidth: "560px", color: "var(--text)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--border)", paddingBottom: "14px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <span style={{ fontSize: "1.4rem" }}>💻</span>
                         <div>
                             <div style={{ fontSize: "0.74rem", textTransform: "uppercase", letterSpacing: "1px", color: "var(--text-muted)", fontWeight: 700 }}>
                                 Device Intelligence Profile
                             </div>
-                            <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>
+                            <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, color: "var(--text)" }}>
                                 {ip}
                             </h2>
                         </div>
                     </div>
-                    <button className="btn" onClick={onClose} style={{ padding: "4px 10px", fontSize: "0.85rem" }}>✕</button>
+                    <button className="modal-close-btn" onClick={onClose} aria-label="Close Drawer" style={{ fontSize: "1.3rem", padding: "4px 8px" }}>✕</button>
                 </div>
 
-                <div className="incident-drawer-body">
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px", flex: 1 }}>
                     {/* Key Metrics */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "16px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
                         <div style={{ background: "rgba(0,0,0,0.25)", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)" }}>
                             <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Risk Score</div>
                             <div style={{ fontSize: "1.25rem", fontWeight: 700, color: risk >= 70 ? "#ef4444" : (risk >= 40 ? "#f59e0b" : "#22c55e") }}>
@@ -78,7 +87,7 @@ export default function DeviceProfileDrawer({ device, onClose, onActionComplete 
                     </div>
 
                     {/* Hardware & OS Heuristics */}
-                    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)", borderRadius: "8px", padding: "14px", marginBottom: "14px" }}>
+                    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)", borderRadius: "8px", padding: "14px" }}>
                         <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>
                             🔍 System & Hardware Fingerprint
                         </div>
@@ -107,7 +116,7 @@ export default function DeviceProfileDrawer({ device, onClose, onActionComplete 
                     </div>
 
                     {/* Threat & Anomaly Indicators */}
-                    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)", borderRadius: "8px", padding: "14px", marginBottom: "14px" }}>
+                    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)", borderRadius: "8px", padding: "14px" }}>
                         <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>
                             ⚡ Behavioral Risk Indicators
                         </div>
@@ -119,13 +128,13 @@ export default function DeviceProfileDrawer({ device, onClose, onActionComplete 
                     </div>
 
                     {actionMsg && (
-                        <div style={{ padding: "8px 12px", borderRadius: "6px", fontSize: "0.8rem", marginBottom: "12px", background: actionMsg.startsWith("✓") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: actionMsg.startsWith("✓") ? "#22c55e" : "#f87171" }}>
+                        <div style={{ padding: "8px 12px", borderRadius: "6px", fontSize: "0.8rem", background: actionMsg.startsWith("✓") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: actionMsg.startsWith("✓") ? "#22c55e" : "#f87171" }}>
                             {actionMsg}
                         </div>
                     )}
 
                     {/* Actions */}
-                    <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+                    <div style={{ display: "flex", gap: "10px", marginTop: "auto", paddingTop: "12px", borderTop: "1px solid var(--border)" }}>
                         <button
                             className="btn btn-danger"
                             onClick={handleContain}
@@ -143,4 +152,6 @@ export default function DeviceProfileDrawer({ device, onClose, onActionComplete 
             </div>
         </div>
     );
+
+    return createPortal(drawerContent, document.body);
 }

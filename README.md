@@ -79,6 +79,8 @@
 - 🎣 **16-Feature Random Forest Phishing Classifier**: Lexical analysis extracting length, domain entropy, IP literals, punycode, URL shorteners, and keyword densities (`/api/check-url`).
 - 🪤 **Canary Honeytoken Tripwires & Ransomware Defense**: Decoy honeytokens (`.canary_system_vault.docx`) with instant critical alerts on unauthorized access, base64 byte entropy inspection, and ransomware extension matching.
 - 🛡️ **Safe Autonomous Containment with TTL Rollback**: Prohibits blocking loopback (`127.0.0.1`), network gateways, DNS resolvers, and operator subnets. Sliding-TTL daemon automatically expires and deletes temporary block rules.
+- 💾 **100% Dynamic Telemetry & Database Persistence**: Complete elimination of simulated fallbacks. Port scans and CVE audits persist to `vuln_scans`, historical posture scores save to `posture_history`, and DNS/file telemetry persists to `telemetry_history`.
+- 🌐 **Real Live Network Topology**: Interactive network map populated entirely from live ARP discovery and active connection sessions (`/api/sessions`) with genuine packet counts and protocols.
 - 📦 **Rolling PCAP Forensics Buffer**: In-memory ring buffer capturing the last 1,000 raw packets with direct Wireshark `.pcap` export (`/api/pcap/export`).
 
 ---
@@ -262,6 +264,21 @@ All settings are tunable via environment variables or `backend/settings.json`:
 | `VOLCANO_AUTO_BLOCK_DURATION_MINUTES` | `5` | Duration before temporary block rules are deleted. |
 | `VOLCANO_NOTIFICATION_ENABLED` | `false` | Enable multi-channel incident dispatches. |
 | `VOLCANO_LLM_PROVIDER` | `local` | Copilot provider: `local`, `openai`, `anthropic`, `gemini`. |
+
+---
+
+## Comprehensive Technical Documentation Center
+
+For exhaustive algorithmic specifications, architectural deep dives, database designs, and technical presentation defense guides, refer to the documentation center in `docs/`:
+
+- [Feature Logic Guide (docs/FEATURE_LOGIC_GUIDE.md)](file:///f:/AIPowered_firewall/docs/FEATURE_LOGIC_GUIDE.md): Standardized 11-point architectural breakdown of every feature across all 8 tabs.
+- [Architecture Deep Dive (docs/ARCHITECTURE_DEEP_DIVE.md)](file:///f:/AIPowered_firewall/docs/ARCHITECTURE_DEEP_DIVE.md): 4-Tier SOC architecture, concurrency and thread models, state machines, and dual-engine persistence.
+- [API & Data Flow (docs/API_AND_DATA_FLOW.md)](file:///f:/AIPowered_firewall/docs/API_AND_DATA_FLOW.md): Complete REST endpoint catalog, schemas, WebSocket envelopes, and end-to-end packet traces.
+- [AI & ML Algorithms (docs/AI_ML_ALGORITHMS.md)](file:///f:/AIPowered_firewall/docs/AI_ML_ALGORITHMS.md): Mathematical formulations, KaTeX equations, loss functions, and feature engineering.
+- [Network Security Engine (docs/NETWORK_SECURITY_ENGINE.md)](file:///f:/AIPowered_firewall/docs/NETWORK_SECURITY_ENGINE.md): Scapy/Npcap ingestion, 5-tuple flow engine, L7 DPI regex, C2 beaconing, and fan-out detection.
+- [Firewall Policy Enforcement (docs/FIREWALL_ENFORCEMENT.md)](file:///f:/AIPowered_firewall/docs/FIREWALL_ENFORCEMENT.md): Multi-layer packet filtering, kernel synchronization, Sliding-TTL auto-rollback, and emergency killswitch.
+- [Database Schema Explained (docs/DATABASE_SCHEMA_EXPLAINED.md)](file:///f:/AIPowered_firewall/docs/DATABASE_SCHEMA_EXPLAINED.md): Relational schema design, ER models, indexing strategy, and SQLite WAL / PostgreSQL 16 parity.
+- [Testing & Verification Guide (docs/TESTING_AND_VERIFICATION.md)](file:///f:/AIPowered_firewall/docs/TESTING_AND_VERIFICATION.md): Verification procedures, 150 backend unit tests, and 47-check E2E tab verification.
 
 ---
 

@@ -414,7 +414,10 @@ export default function AlertsTab({ currentUser }) {
                 <IncidentDrawer
                     alert={activeDrawerAlert}
                     onClose={() => setActiveDrawerAlert(null)}
-                    onAlertUpdated={fetchAlerts}
+                    onAlertUpdated={(updated) => {
+                        fetchAlerts();
+                        if (updated) setActiveDrawerAlert(prev => prev ? { ...prev, ...updated } : null);
+                    }}
                     currentUser={currentUser}
                 />
             )}
